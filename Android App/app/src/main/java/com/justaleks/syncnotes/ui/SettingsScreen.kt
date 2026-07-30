@@ -56,11 +56,15 @@ fun SettingsScreen(
     onSetPassword: (String, Boolean) -> Unit,
     onConfirmIdentity: (String) -> Unit,
     onCancelReauth: () -> Unit,
+    onLinkGoogle: () -> Unit,
+    onUnlink: (String) -> Unit,
     onSignOut: () -> Unit,
     onBack: () -> Unit,
 ) {
     val hasPassword = account.providers.contains(PASSWORD_PROVIDER)
     val hasGoogle = account.providers.contains(GOOGLE_PROVIDER)
+    // Firebase will not let you remove the only way back into an account.
+    val canUnlink = account.providers.size > 1
 
     var name by remember(account.displayName) { mutableStateOf(account.displayName) }
     var password by remember { mutableStateOf("") }
@@ -178,9 +182,20 @@ fun SettingsScreen(
             }
 
             SettingsCard("Sign-in methods") {
+                Text(
+                    "Connect both and you can sign in either way - same account, same notes.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
                 ProviderRow(
                     label = "Email & password",
                     detail = if (hasPassword) account.email else "Not set up",
+                    action = if (hasPassword && canUnlink) {
+                        { TextButton(onClick = { onUnlink(PASSWORD_PROVIDER) }, enabled = !status.busy) {
+                            Text("Disconnect", color = MaterialTheme.colorScheme.error)
+                        } }
+                    } else null,
                 )
                 OutlinedTextField(
                     value = password,
@@ -198,13 +213,29 @@ fun SettingsScreen(
                 ProviderRow(
                     label = "Google",
                     detail = if (hasGoogle) "Connected" else "Not connected",
+                    action = when {
+                        hasGoogle && canUnlink -> {
+                            { TextButton(onClick = { onUnlink(GOOGLE_PROVIDER) }, enabled = !status.busy) {
+                                Text("Disconnect", color = MaterialTheme.colorScheme.error)
+                            } }
+                        }
+                        !hasGoogle -> {
+                            { TextButton(onClick = onLinkGoogle, enabled = !status.busy) {
+                                Text("Connect")
+                            } }
+                        }
+                        else -> null
+                    },
                 )
-                Text(
-                    "Connecting Google has to be done on the website for now — Android " +
-                        "sign-in needs this app's signing fingerprint registered in Firebase.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+
+                if (!canUnlink) {
+                    Text(
+                        "Add a second method before removing the first - otherwise you'd " +
+                            "lock yourself out.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
 
             OutlinedButton(onClick = onSignOut) {
@@ -232,13 +263,20 @@ private fun SettingsCard(title: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun ProviderRow(label: String, detail: String) {
-    Column {
-        Text(label, fontWeight = FontWeight.SemiBold)
-        Text(
-            detail,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+private fun ProviderRow(label: String, detail: String, action: (@Composable () -> Unit)? = null) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, fontWeight = FontWeight.SemiBold)
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        action?.invoke()
     }
 }

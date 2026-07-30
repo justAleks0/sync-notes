@@ -1,6 +1,9 @@
 package com.justaleks.syncnotes
 
 import android.app.Application
+import android.content.Context
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuthException
@@ -120,6 +123,19 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
         NotesRepository.register(email.trim(), password)
     }
 
+    /** [context] must be an Activity — Credential Manager shows the account picker. */
+    fun signInWithGoogle(context: Context) = authCall {
+        NotesRepository.signInWithGoogle(context)
+    }
+
+    fun linkGoogle(context: Context) = settingsCall("Google connected.") {
+        NotesRepository.linkGoogle(context)
+    }
+
+    fun unlinkProvider(providerId: String) = settingsCall("Sign-in method removed.") {
+        NotesRepository.unlinkProvider(providerId)
+    }
+
     fun signOut() = NotesRepository.signOut()
 
     fun clearAuthError() {
@@ -212,6 +228,10 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
 
 /** Turns Firebase's auth error codes into something a human can read. */
 private fun authErrorMessage(e: Exception): String = when {
+    // Backing out of the Google account picker is a choice, not an error.
+    e is GetCredentialCancellationException -> ""
+    e is NoCredentialException ->
+        "No Google account on this device. Add one in Android settings first."
     e is FirebaseAuthRecentLoginRequiredException ->
         "For security, confirm your password before changing this."
     else -> when ((e as? FirebaseAuthException)?.errorCode) {

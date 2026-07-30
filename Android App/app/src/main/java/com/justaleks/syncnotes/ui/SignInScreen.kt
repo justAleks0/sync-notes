@@ -8,9 +8,12 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -32,6 +35,7 @@ fun SignInScreen(
     error: String,
     onSignIn: (String, String) -> Unit,
     onRegister: (String, String) -> Unit,
+    onGoogleSignIn: () -> Unit,
     onModeChanged: () -> Unit,
 ) {
     var registering by remember { mutableStateOf(false) }
@@ -87,6 +91,28 @@ fun SignInScreen(
         ) {
             if (busy) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
             else Text(if (registering) "Create account" else "Sign in")
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        ) {
+            HorizontalDivider(modifier = Modifier.weight(1f))
+            Text(
+                "or",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            HorizontalDivider(modifier = Modifier.weight(1f))
+        }
+
+        OutlinedButton(
+            onClick = onGoogleSignIn,
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Continue with Google")
         }
 
         TextButton(

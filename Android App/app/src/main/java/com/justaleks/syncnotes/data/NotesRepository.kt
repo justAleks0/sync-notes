@@ -1,5 +1,6 @@
 package com.justaleks.syncnotes.data
 
+import android.content.Context
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
@@ -98,6 +99,23 @@ object NotesRepository {
 
     suspend fun register(email: String, password: String) {
         auth.createUserWithEmailAndPassword(email, password).await()
+    }
+
+    suspend fun signInWithGoogle(context: Context) {
+        auth.signInWithCredential(GoogleSignIn.requestCredential(context)).await()
+    }
+
+    /** Attaches Google to the account that is already signed in. */
+    suspend fun linkGoogle(context: Context) {
+        val user = auth.currentUser ?: error("Not signed in.")
+        user.linkWithCredential(GoogleSignIn.requestCredential(context)).await()
+        user.reload().await()
+    }
+
+    suspend fun unlinkProvider(providerId: String) {
+        val user = auth.currentUser ?: error("Not signed in.")
+        user.unlink(providerId).await()
+        user.reload().await()
     }
 
     fun signOut() = auth.signOut()

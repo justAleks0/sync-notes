@@ -3,6 +3,7 @@ package com.justaleks.syncnotes
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -101,6 +102,9 @@ private fun SyncNotesContent(
     needsReauth: Boolean,
     viewModel: NotesViewModel,
 ) {
+    // Credential Manager renders its account picker on an Activity, not a bare Context.
+    val activity = LocalActivity.current ?: return
+
     var openNoteId by rememberSaveable { mutableStateOf<String?>(null) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
 
@@ -123,6 +127,8 @@ private fun SyncNotesContent(
             error = authError,
             onSignIn = viewModel::signIn,
             onRegister = viewModel::register,
+            // Credential Manager needs an Activity to show the account picker on.
+            onGoogleSignIn = { viewModel.signInWithGoogle(activity) },
             onModeChanged = viewModel::clearAuthError,
         )
 
@@ -142,6 +148,8 @@ private fun SyncNotesContent(
                     onSetPassword = viewModel::setPassword,
                     onConfirmIdentity = viewModel::confirmIdentity,
                     onCancelReauth = viewModel::cancelReauth,
+                    onLinkGoogle = { viewModel.linkGoogle(activity) },
+                    onUnlink = viewModel::unlinkProvider,
                     onSignOut = {
                         closeSettings()
                         openNoteId = null
