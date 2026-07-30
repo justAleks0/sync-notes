@@ -5,7 +5,7 @@
 .DESCRIPTION
   This is what makes the in-app update check work. Each client compares its own
   compiled-in version against the newest release tag, so the tag and the built
-  artifacts have to agree — that is why one script owns both.
+  artifacts have to agree - that is why one script owns both.
 
   Builds locally rather than in CI on purpose: the APK is signed with this machine's
   debug keystore, and CI would generate a different one every run, so every update
@@ -53,7 +53,7 @@ function Invoke-Native([scriptblock]$command, [string]$what) {
 function Set-VersionIn($path, $pattern, $label) {
   $text = Read-Text $path
   # Guard against a silent no-op if the file is ever restructured. Text being
-  # unchanged is fine — that just means it is already at this version.
+  # unchanged is fine - that just means it is already at this version.
   if ($text -notmatch $pattern) { throw "Version pattern did not match in $path" }
   Write-Text $path ($text -replace $pattern, "`${1}$Version`${2}")
   Write-Host "  $label"
@@ -119,7 +119,7 @@ git -C $root add -A
 if (git -C $root diff --cached --name-only) {
   Invoke-Native { git -C $root commit -m "Release $tag" } "git commit"
 } else {
-  Write-Host "  nothing to commit — version files already current"
+  Write-Host "  nothing to commit - version files already current"
 }
 Invoke-Native { git -C $root tag -a $tag -m "Sync Notes $Version" } "git tag"
 Invoke-Native { git -C $root push origin main } "git push"
