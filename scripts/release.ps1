@@ -115,10 +115,15 @@ if ($NoPublish) {
 
 Step "Committing and tagging $tag"
 git -C $root add -A
-git -C $root commit -m "Release $tag"
-git -C $root tag -a $tag -m "Sync Notes $Version"
-git -C $root push origin main
-git -C $root push origin $tag
+# Re-running at the same version leaves nothing to commit, which is not a failure.
+if (git -C $root diff --cached --name-only) {
+  Invoke-Native { git -C $root commit -m "Release $tag" } "git commit"
+} else {
+  Write-Host "  nothing to commit — version files already current"
+}
+Invoke-Native { git -C $root tag -a $tag -m "Sync Notes $Version" } "git tag"
+Invoke-Native { git -C $root push origin main } "git push"
+Invoke-Native { git -C $root push origin $tag } "git push --tags"
 
 Step "Creating GitHub release"
 $notes = @"
@@ -131,6 +136,9 @@ Installed apps check this release automatically and offer the update in-app.
 - **Web** — always up to date, nothing to download
 "@
 
-gh release create $tag $installer.FullName $apk --repo justAleks0/sync-notes --title "Sync Notes $Version" --notes $notes
+Invoke-Native {
+  gh release create $tag $installer.FullName $apk --repo justAleks0/sync-notes `
+    --title "Sync Notes $Version" --notes $notes
+} "gh release create"
 
 Write-Host "`nReleased $tag" -ForegroundColor Green
