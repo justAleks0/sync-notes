@@ -126,15 +126,17 @@ Invoke-Native { git -C $root push origin main } "git push"
 Invoke-Native { git -C $root push origin $tag } "git push --tags"
 
 Step "Creating GitHub release"
-$notes = @"
-Sync Notes $Version
-
-Installed apps check this release automatically and offer the update in-app.
-
-- **Windows** — download the ``.exe`` installer
-- **Android** — download the ``.apk`` (you'll need to allow installs from your browser)
-- **Web** — always up to date, nothing to download
-"@
+# Built by joining lines rather than a here-string: PowerShell 5.1 fails to parse
+# here-strings in a file with LF-only line endings, which this repo uses.
+$notes = @(
+  "Sync Notes $Version",
+  '',
+  'Installed apps check this release automatically and offer the update in-app.',
+  '',
+  '- **Windows** - download the `.exe` installer',
+  "- **Android** - download the ``.apk`` (you'll need to allow installs from your browser)",
+  '- **Web** - always up to date, nothing to download'
+) -join "`n"
 
 Invoke-Native {
   gh release create $tag $installer.FullName $apk --repo justAleks0/sync-notes `
