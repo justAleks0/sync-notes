@@ -1,0 +1,25 @@
+{
+  "name": "sync-notes-desktop",
+  "productName": "Sync Notes",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sync Notes desktop app",
+  "author": "justaleks",
+  "main": "main.js",
+  "scripts": {
+    "build:web": "npm run build --prefix ../Website",
+    "start": "npm run build:web && electron .",
+    "start:quick": "electron .",
+    "dist": "npm run build:web && electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^40.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.justaleks.syncnotes",
+    "files": ["main.js", "server.js"],
+    "extraResources": [{ "from": "../Website/dist", "to": "web" }],
+    "win": { "target": "nsis" }
+  }
+}

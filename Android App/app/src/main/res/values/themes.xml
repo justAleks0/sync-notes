@@ -1,0 +1,9 @@
+<resources>
+    <!-- Colours live in Compose (ui/Theme.kt). This only styles the window before
+         the first frame is drawn, so it just needs to match the app background. -->
+    <style name="Theme.SyncNotes" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/app_background</item>
+        <item name="android:statusBarColor">@color/app_background</item>
+        <item name="android:navigationBarColor">@color/app_background</item>
+    </style>
+</resources>
