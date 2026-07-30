@@ -31,6 +31,23 @@ $tag = "v$Version"
 
 function Step($message) { Write-Host "`n=== $message ===" -ForegroundColor Cyan }
 
+# Windows PowerShell 5.1 reads with Get-Content as ANSI and writes -Encoding utf8 with
+# a BOM, which mangles non-ASCII and makes package.json unparseable. Go through .NET so
+# files round-trip as UTF-8 with no BOM.
+$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+function Read-Text($path) { [System.IO.File]::ReadAllText((Resolve-Path $path), $Utf8NoBom) }
+function Write-Text($path, $text) {
+  [System.IO.File]::WriteAllText((Resolve-Path $path), $text, $Utf8NoBom)
+}
+
+function Set-VersionIn($path, $pattern, $label) {
+  $text = Read-Text $path
+  $updated = $text -replace $pattern, "`${1}$Version`${2}"
+  if ($updated -eq $text) { throw "Version pattern did not match in $path" }
+  Write-Text $path $updated
+  Write-Host "  $label"
+}
+
 if (git -C $root status --porcelain) {
   throw "Working tree is dirty. Commit or stash first so the release matches a real commit."
 }
@@ -39,18 +56,9 @@ if (git -C $root status --porcelain) {
 
 Step "Setting version to $Version"
 
-foreach ($pkg in @("$root\Website\package.json", "$root\Computer Software\package.json")) {
-  $json = Get-Content $pkg -Raw
-  $json = $json -replace '("version":\s*")[^"]+(")', "`${1}$Version`${2}"
-  Set-Content $pkg $json -NoNewline -Encoding utf8
-  Write-Host "  $(Split-Path $pkg -Parent | Split-Path -Leaf)/package.json"
-}
-
-$gradle = "$root\Android App\app\build.gradle.kts"
-$text = Get-Content $gradle -Raw
-$text = $text -replace '(val appVersionName = ")[^"]+(")', "`${1}$Version`${2}"
-Set-Content $gradle $text -NoNewline -Encoding utf8
-Write-Host "  Android App/app/build.gradle.kts"
+Set-VersionIn "$root\Website\package.json" '("version":\s*")[^"]+(")' "Website/package.json"
+Set-VersionIn "$root\Computer Software\package.json" '("version":\s*")[^"]+(")' "Computer Software/package.json"
+Set-VersionIn "$root\Android App\app\build.gradle.kts" '(val appVersionName = ")[^"]+(")' "Android App/app/build.gradle.kts"
 
 # --- build --------------------------------------------------------------------
 
