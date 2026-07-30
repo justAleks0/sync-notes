@@ -80,21 +80,27 @@ npx firebase-tools deploy --only firestore:rules --project sync-notes-c252b
 Until these are deployed, the database is running on whatever rules the console
 created it with — check them before putting anything real in there.
 
-## Emulator
+## Testing on a device
 
-An AVD named `syncnotes_test` (Pixel 6, API 34, google_apis) is set up for this
-project. The `google_apis` image matters — Firebase needs Play services, which the
-plain `default` images don't have.
+A physical phone over USB is the primary target. From `Android App`:
+
+```bash
+./gradlew :app:installDebug
+```
+
+Google sign-in is one reason to prefer a real phone: it needs Play services and a
+Google account already on the device, which a bare emulator doesn't have.
+
+Note that the in-app updater only ever delivers *released* APKs, so it is not a
+substitute for this during development — use it to ship, use `installDebug` to
+iterate.
+
+An AVD named `syncnotes_test` (Pixel 6, API 34, google_apis) also exists if a second
+device is ever useful. The `google_apis` image matters — Firebase needs Play
+services, which the plain `default` images lack.
 
 ```bash
 "$ANDROID_HOME/emulator/emulator" -avd syncnotes_test
-```
-
-Then `./gradlew :app:installDebug` from `Android App`, or install on every attached
-device at once:
-
-```bash
-adb install -r "Android App/app/build/outputs/apk/debug/app-debug.apk"
 ```
 
 ## Updates
