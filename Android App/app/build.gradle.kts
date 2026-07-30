@@ -6,6 +6,16 @@ plugins {
     alias(libs.plugins.google.services)
 }
 
+// Single source of truth for the app version — the release script rewrites this line,
+// and UpdateChecker compares it against the newest GitHub release tag.
+val appVersionName = "0.1.0"
+
+// Android needs a monotonically increasing integer, so derive one from the version.
+// 0.1.0 -> 100, 1.2.3 -> 10203.
+val appVersionCode = appVersionName.split(".")
+    .map { it.toIntOrNull() ?: 0 }
+    .let { (major, minor, patch) -> major * 10000 + minor * 100 + patch }
+
 android {
     namespace = "com.justaleks.syncnotes"
     // AndroidX 1.19 / lifecycle 2.11 require compiling against API 37.
@@ -17,9 +27,8 @@ android {
         applicationId = "com.justaleks.syncnotes"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        // Must match the release tag (v0.1.0) — UpdateChecker compares against this.
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -31,6 +40,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Signed with the debug key on purpose: sideloaded updates only install
+            // over an existing app if both APKs share a signature, and every build so
+            // far came from this machine's debug keystore. Swap this for a real release
+            // keystore before distributing to anyone else — see README.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
