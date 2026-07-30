@@ -40,6 +40,16 @@ function Write-Text($path, $text) {
   [System.IO.File]::WriteAllText((Resolve-Path $path), $text, $Utf8NoBom)
 }
 
+# Tools like vite and gradle write progress to stderr even when they succeed, and
+# $ErrorActionPreference='Stop' turns that into a fatal NativeCommandError. Run native
+# commands with it relaxed and judge them by their exit code, which is the real signal.
+function Invoke-Native([scriptblock]$command, [string]$what) {
+  $previous = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try { & $command } finally { $ErrorActionPreference = $previous }
+  if ($LASTEXITCODE -ne 0) { throw "$what failed (exit code $LASTEXITCODE)" }
+}
+
 function Set-VersionIn($path, $pattern, $label) {
   $text = Read-Text $path
   # Guard against a silent no-op if the file is ever restructured. Text being
@@ -64,17 +74,19 @@ Set-VersionIn "$root\Android App\app\build.gradle.kts" '(val appVersionName = ")
 # --- build --------------------------------------------------------------------
 
 Step "Building website"
-npm install --prefix "$root\Website" --no-fund --no-audit --silent
-npm run build --prefix "$root\Website"
+Invoke-Native { npm install --prefix "$root\Website" --no-fund --no-audit --silent } "npm install (website)"
+Invoke-Native { npm run build --prefix "$root\Website" } "website build"
 
 Step "Building Windows installer"
-npm install --prefix "$root\Computer Software" --no-fund --no-audit --silent
+Invoke-Native { npm install --prefix "$root\Computer Software" --no-fund --no-audit --silent } "npm install (desktop)"
 Push-Location "$root\Computer Software"
-try { npx --no-install electron-builder --win --publish never } finally { Pop-Location }
+try { Invoke-Native { npx --no-install electron-builder --win --publish never } "electron-builder" }
+finally { Pop-Location }
 
 Step "Building Android APK"
 Push-Location "$root\Android App"
-try { & .\gradlew.bat :app:assembleRelease --console=plain } finally { Pop-Location }
+try { Invoke-Native { & .\gradlew.bat :app:assembleRelease --console=plain } "gradle assembleRelease" }
+finally { Pop-Location }
 
 # --- collect artifacts --------------------------------------------------------
 
