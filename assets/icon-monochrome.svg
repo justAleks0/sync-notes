@@ -1,0 +1,27 @@
+<!--
+  Android themed-icon layer. Android discards the colour and keeps only the alpha,
+  tinting the result, so the full-colour artwork cannot be reused here: its two solid
+  pages would flatten into one featureless blob.
+
+  Redrawn as a silhouette instead - a single outlined page with its text lines and the
+  two sync arrows, which still reads once flattened. The page is an even-odd ring
+  (outer rounded rect minus inner one) so it stays an outline rather than a slab.
+
+  Same viewBox as icon-foreground.svg so it lands in the adaptive-icon safe zone.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="432" height="432" viewBox="-16.95 -15.95 231.9 231.9" role="img">
+  <title>Sync Notes</title>
+  <path fill="#000000" fill-rule="evenodd"
+        d="M94 72 H148 A8 8 0 0 1 156 80 V156 A8 8 0 0 1 148 164 H94 A8 8 0 0 1 86 156 V80 A8 8 0 0 1 94 72 Z
+           M98 80 H144 A4 4 0 0 1 148 84 V152 A4 4 0 0 1 144 156 H98 A4 4 0 0 1 94 152 V84 A4 4 0 0 1 98 80 Z"/>
+  <g fill="#000000">
+    <rect x="98" y="92" width="46" height="8" rx="4"/>
+    <rect x="98" y="108" width="46" height="7" rx="3.5"/>
+    <rect x="98" y="124" width="46" height="7" rx="3.5"/>
+    <rect x="98" y="140" width="28" height="7" rx="3.5"/>
+  </g>
+  <path d="M160 90 C 178 70, 170 44, 138 41" fill="none" stroke="#000000" stroke-width="9" stroke-linecap="round"/>
+  <polygon points="126,41 142,32 142,50" fill="#000000"/>
+  <path d="M42 110 C 24 130, 32 156, 64 159" fill="none" stroke="#000000" stroke-width="9" stroke-linecap="round"/>
+  <polygon points="76,159 60,150 60,168" fill="#000000"/>
+</svg>

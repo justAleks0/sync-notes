@@ -103,6 +103,42 @@ services, which the plain `default` images lack.
 "$ANDROID_HOME/emulator/emulator" -avd syncnotes_test
 ```
 
+## Note format
+
+Bodies are markdown. They are still a plain string in Firestore, so nothing about
+the data model or the security rules changed — only how the body is rendered.
+
+Every client has an edit/preview toggle. GitHub-flavoured markdown is supported:
+headings, bold/italic/strikethrough, ordered and unordered lists, task lists,
+tables, blockquotes, fenced code, links and images.
+
+Raw HTML is deliberately **not** rendered. Note bodies sync between devices, so a
+note is the last place that should be able to run script; the renderers are
+configured to escape HTML rather than pass it through.
+
+## Images
+
+Images live in Firebase Storage at `users/{uid}/notes/{noteId}/…` — the same path
+shape as Firestore, so `storage.rules` is the same ownership check. The note body
+just holds a normal markdown image link to the download URL.
+
+- **Web/desktop** — paste from the clipboard, drag and drop, or the *Image* button
+- **Android** — the *Image* button opens the system photo picker
+
+10 MB limit per image, enforced client-side before upload and again in the rules.
+
+**Storage has to be enabled before any of this works.** Firebase Console →
+Storage → Get started. The bucket named in `google-services.json` does not exist
+until you do that, and new Firebase projects may need the Blaze plan to create one.
+Then push the rules:
+
+```bash
+npx firebase-tools deploy --only storage --project sync-notes-c252b
+```
+
+Until then image uploads fail with a "Storage isn't set up" message; markdown works
+regardless.
+
 ## Updates
 
 On launch, each installed client asks

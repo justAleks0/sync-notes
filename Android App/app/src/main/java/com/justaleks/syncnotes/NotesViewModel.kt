@@ -2,14 +2,17 @@ package com.justaleks.syncnotes
 
 import android.app.Application
 import android.content.Context
+import android.net.Uri
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
+import com.justaleks.syncnotes.data.ImageUploader
 import com.justaleks.syncnotes.data.Note
 import com.justaleks.syncnotes.data.NotesRepository
+import com.justaleks.syncnotes.data.uploadErrorMessage
 import com.justaleks.syncnotes.data.UpdateChecker
 import com.justaleks.syncnotes.data.UpdateInfo
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -81,6 +84,39 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
     private val _needsReauth = MutableStateFlow(false)
     val needsReauth: StateFlow<Boolean> = _needsReauth.asStateFlow()
     private var pendingChange: (suspend () -> Unit)? = null
+
+    private val _imageUploading = MutableStateFlow(false)
+    val imageUploading: StateFlow<Boolean> = _imageUploading.asStateFlow()
+
+    private val _imageError = MutableStateFlow("")
+    val imageError: StateFlow<String> = _imageError.asStateFlow()
+
+    /**
+     * Uploads a picked image and hands back its markdown so the editor can splice it
+     * in at the caret.
+     */
+    fun uploadImage(uri: Uri, noteId: String, onInsert: (String) -> Unit) {
+        val uid = uid ?: return
+        viewModelScope.launch {
+            _imageUploading.value = true
+            _imageError.value = ""
+            try {
+                val context = getApplication<Application>()
+                val url = ImageUploader.upload(context, uid, noteId, uri)
+                onInsert(ImageUploader.markdownFor(context, uri, url))
+            } catch (e: IllegalArgumentException) {
+                _imageError.value = e.message ?: "That image can't be used."
+            } catch (e: Exception) {
+                _imageError.value = uploadErrorMessage(e)
+            } finally {
+                _imageUploading.value = false
+            }
+        }
+    }
+
+    fun clearImageError() {
+        _imageError.value = ""
+    }
 
     private val _update = MutableStateFlow<UpdateInfo?>(null)
     val update: StateFlow<UpdateInfo?> = _update.asStateFlow()

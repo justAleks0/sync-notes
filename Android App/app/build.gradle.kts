@@ -72,7 +72,14 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.storage)
     implementation(libs.kotlinx.coroutines.play.services)
+
+    // Markdown rendering, with Coil fetching the images referenced from note bodies.
+    implementation(libs.markdown.renderer.m3)
+    implementation(libs.markdown.renderer.coil3)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 
     // Google sign-in goes through Credential Manager; Play Services Auth is the
     // backend that actually knows about the accounts on the device.

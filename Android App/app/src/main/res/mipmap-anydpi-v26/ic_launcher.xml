@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Flat colour behind the artwork so the launcher can mask the icon to whatever
-         shape it likes without clipping into the drawing itself.
-         No <monochrome> layer: the foreground is full-colour artwork, and a themed
-         icon derived from its alpha would just be a solid blob. -->
+         shape it likes without clipping into the drawing itself. The monochrome layer
+         is a separate silhouette, not the foreground: Android keeps only the alpha,
+         and the full-colour artwork would flatten into a solid blob. -->
     <background android:drawable="@color/ic_launcher_background" />
     <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_monochrome" />
 </adaptive-icon>

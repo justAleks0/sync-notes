@@ -4,6 +4,8 @@ import { useAuth } from './useAuth'
 import { SignIn } from './SignIn'
 import { Profile } from './Profile'
 import { UpdateBanner } from './UpdateBanner'
+import { Markdown } from './Markdown'
+import { imageMarkdown, imageProblem, uploadErrorMessage, uploadImage } from './images'
 import { createNote, deleteNote, saveNote, watchNotes, type Note } from './notes'
 
 const AUTOSAVE_DELAY_MS = 600
@@ -134,7 +136,13 @@ function Editor({
   const [title, setTitle] = useState(note.title)
   const [body, setBody] = useState(note.body)
   const [dirty, setDirty] = useState(false)
+  const [preview, setPreview] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const [dragging, setDragging] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const bodyRef = useRef<HTMLTextAreaElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   // Adopt changes that arrived from another device, but never clobber what the
   // user is actively typing here.
@@ -177,26 +185,130 @@ function Editor({
     setDirty(true)
   }
 
+  /** Splices text in at the caret, so an image lands where the user was typing. */
+  function insertAtCaret(text: string) {
+    const field = bodyRef.current
+    const at = field ? field.selectionStart : body.length
+    const next = `${body.slice(0, at)}${text}${body.slice(field ? field.selectionEnd : body.length)}`
+    edit(() => setBody(next))
+    requestAnimationFrame(() => {
+      if (!field) return
+      const caret = at + text.length
+      field.focus()
+      field.setSelectionRange(caret, caret)
+    })
+  }
+
+  async function addImages(files: File[]) {
+    const images = files.filter((f) => f.type.startsWith('image/'))
+    if (images.length === 0) return
+
+    setUploadError('')
+    for (const file of images) {
+      const problem = imageProblem(file)
+      if (problem) {
+        setUploadError(problem)
+        continue
+      }
+      setUploading(true)
+      try {
+        const url = await uploadImage(uid, note.id, file)
+        insertAtCaret(`\n\n${imageMarkdown(file, url)}\n\n`)
+      } catch (err) {
+        setUploadError(uploadErrorMessage(err))
+      } finally {
+        setUploading(false)
+      }
+    }
+  }
+
   return (
-    <div className="editor">
+    <div
+      className={`editor ${dragging ? 'dropping' : ''}`}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes('Files')) return
+        e.preventDefault()
+        setDragging(true)
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return
+        setDragging(false)
+      }}
+      onDrop={(e) => {
+        if (!e.dataTransfer.types.includes('Files')) return
+        e.preventDefault()
+        setDragging(false)
+        addImages(Array.from(e.dataTransfer.files))
+      }}
+    >
       <header className="editor-head">
         <button className="link back" onClick={onBack}>← Notes</button>
-        <span className="muted status">{dirty || note.pending ? 'Saving…' : 'Saved'}</span>
+        <span className="muted status">
+          {uploading ? 'Uploading image…' : dirty || note.pending ? 'Saving…' : 'Saved'}
+        </span>
+        <button
+          className="link"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          title="Insert an image — you can also paste or drag one in"
+        >
+          Image
+        </button>
+        <button className="link" onClick={() => setPreview(!preview)}>
+          {preview ? 'Edit' : 'Preview'}
+        </button>
         <button className="link danger" onClick={onDelete}>Delete</button>
       </header>
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={(e) => {
+          addImages(Array.from(e.target.files ?? []))
+          e.target.value = ''
+        }}
+      />
+
+      {uploadError && <p className="error upload-error">{uploadError}</p>}
 
       <input
         className="title-input"
         placeholder="Title"
         value={title}
         onChange={(e) => edit(() => setTitle(e.target.value))}
+        readOnly={preview}
       />
-      <textarea
-        className="body-input"
-        placeholder="Start writing…"
-        value={body}
-        onChange={(e) => edit(() => setBody(e.target.value))}
-      />
+      {preview ? (
+        body.trim() ? (
+          <div className="body-preview">
+            <Markdown source={body} />
+          </div>
+        ) : (
+          <div className="body-preview placeholder">Nothing to preview yet.</div>
+        )
+      ) : (
+        <textarea
+          ref={bodyRef}
+          className="body-input"
+          placeholder="Start writing… markdown works: **bold**, # heading, - list"
+          value={body}
+          onChange={(e) => edit(() => setBody(e.target.value))}
+          onPaste={(e) => {
+            // Pasting a screenshot should just work, so intercept before the
+            // clipboard's text/plain fallback lands in the textarea.
+            const files = Array.from(e.clipboardData.files)
+            if (files.some((f) => f.type.startsWith('image/'))) {
+              e.preventDefault()
+              addImages(files)
+            }
+          }}
+        />
+      )}
+
+      {dragging && <div className="drop-hint">Drop images to add them</div>}
     </div>
   )
 }

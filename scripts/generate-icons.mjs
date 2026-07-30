@@ -18,6 +18,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const icon = join(root, 'assets', 'icon.svg')
 const foreground = join(root, 'assets', 'icon-foreground.svg')
 const iconRound = join(root, 'assets', 'icon-round.svg')
+const monochrome = join(root, 'assets', 'icon-monochrome.svg')
 
 const render = (src, size) =>
   sharp(src, { density: 600 }).resize(size, size, { fit: 'contain', background: '#00000000' }).png()
@@ -60,6 +61,8 @@ const res = join(root, 'Android App', 'app', 'src', 'main', 'res')
 for (const [density, scale] of Object.entries(DENSITIES)) {
   // Adaptive-icon foreground lives on a 108dp canvas.
   await write(foreground, Math.round(108 * scale), join(res, `mipmap-${density}`, 'ic_launcher_foreground.png'))
+  // Themed-icon layer, same 108dp canvas. Android keeps only its alpha.
+  await write(monochrome, Math.round(108 * scale), join(res, `mipmap-${density}`, 'ic_launcher_monochrome.png'))
   // Legacy launcher icons for API 24-25, which predates adaptive icons: 48dp.
   // Both variants are required - the manifest references round, and on those
   // versions there is no adaptive icon to fall back to.

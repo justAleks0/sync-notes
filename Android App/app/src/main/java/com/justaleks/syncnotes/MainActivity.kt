@@ -4,6 +4,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -60,6 +63,8 @@ private fun SyncNotesApp(viewModel: NotesViewModel = viewModel()) {
     val needsReauth by viewModel.needsReauth.collectAsStateWithLifecycle()
     val update by viewModel.update.collectAsStateWithLifecycle()
     val updateProgress by viewModel.updateProgress.collectAsStateWithLifecycle()
+    val imageUploading by viewModel.imageUploading.collectAsStateWithLifecycle()
+    val imageError by viewModel.imageError.collectAsStateWithLifecycle()
 
     // The app draws edge-to-edge, so the top-level column normally sits under the
     // status bar and each Scaffold insets its own app bar. Once the banner is on
@@ -87,6 +92,8 @@ private fun SyncNotesApp(viewModel: NotesViewModel = viewModel()) {
             authBusy = authBusy,
             settings = settings,
             needsReauth = needsReauth,
+            imageUploading = imageUploading,
+            imageError = imageError,
             viewModel = viewModel,
         )
     }
@@ -100,6 +107,8 @@ private fun SyncNotesContent(
     authBusy: Boolean,
     settings: SettingsStatus,
     needsReauth: Boolean,
+    imageUploading: Boolean,
+    imageError: String,
     viewModel: NotesViewModel,
 ) {
     // Credential Manager renders its account picker on an Activity, not a bare Context.
@@ -107,6 +116,19 @@ private fun SyncNotesContent(
 
     var openNoteId by rememberSaveable { mutableStateOf<String?>(null) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+
+    // The editor supplies the callback that splices the finished markdown in at the
+    // caret. It is held here because the picker result arrives long after the tap.
+    var pendingInsert by remember { mutableStateOf<((String) -> Unit)?>(null) }
+    val pickImage = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        val insert = pendingInsert
+        pendingInsert = null
+        if (uri != null && insert != null && openNoteId != null) {
+            viewModel.uploadImage(uri, openNoteId!!, insert)
+        }
+    }
 
     // Leaving settings should not leave a stale error or notice behind for next time.
     fun closeSettings() {
@@ -171,7 +193,15 @@ private fun SyncNotesContent(
                 BackHandler { openNoteId = null }
                 EditorScreen(
                     note = openNote,
+                    uploading = imageUploading,
+                    imageError = imageError,
                     onSave = { title, body -> viewModel.saveNote(openNote.id, title, body) },
+                    onPickImage = { onInsert ->
+                        pendingInsert = onInsert
+                        pickImage.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
                     onBack = { openNoteId = null },
                     onDelete = {
                         viewModel.deleteNote(openNote.id)

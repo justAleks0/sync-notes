@@ -1,14 +1,20 @@
 package com.justaleks.syncnotes.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,9 +34,15 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mikepenz.markdown.coil3.Coil3ImageTransformerImpl
+import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.m3.markdownColor
+import com.mikepenz.markdown.m3.markdownTypography
 import com.justaleks.syncnotes.data.Note
 import kotlinx.coroutines.delay
 
@@ -40,13 +52,19 @@ private const val AUTOSAVE_DELAY_MS = 600L
 @Composable
 fun EditorScreen(
     note: Note,
+    uploading: Boolean,
+    imageError: String,
     onSave: (title: String, body: String) -> Unit,
+    onPickImage: (onInsert: (String) -> Unit) -> Unit,
     onBack: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var title by remember(note.id) { mutableStateOf(note.title) }
     var body by remember(note.id) { mutableStateOf(note.body) }
     var dirty by remember(note.id) { mutableStateOf(false) }
+    var preview by remember(note.id) { mutableStateOf(false) }
+    // Tracked so an uploaded image can be spliced in where the user was typing.
+    var selection by remember(note.id) { mutableStateOf(TextRange(0)) }
 
     // Adopt edits that arrived from another device, but never clobber what the
     // user is actively typing here.
@@ -81,7 +99,11 @@ fun EditorScreen(
             TopAppBar(
                 title = {
                     Text(
-                        if (dirty || note.pending) "Saving…" else "Saved",
+                        when {
+                            uploading -> "Uploading image…"
+                            dirty || note.pending -> "Saving…"
+                            else -> "Saved"
+                        },
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -92,6 +114,25 @@ fun EditorScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            onPickImage { markdown ->
+                                val at = selection.end.coerceIn(0, body.length)
+                                body = body.substring(0, at) + "\n\n" + markdown + "\n\n" +
+                                    body.substring(at)
+                                dirty = true
+                            }
+                        },
+                        enabled = !uploading,
+                    ) {
+                        Icon(Icons.Default.Image, contentDescription = "Insert image")
+                    }
+                    IconButton(onClick = { preview = !preview }) {
+                        Icon(
+                            if (preview) Icons.Default.Edit else Icons.Default.Visibility,
+                            contentDescription = if (preview) "Edit" else "Preview",
+                        )
+                    }
                     IconButton(onClick = onDelete) {
                         Icon(
                             Icons.Default.Delete,
@@ -113,10 +154,20 @@ fun EditorScreen(
                 .imePadding()
                 .padding(horizontal = 16.dp),
         ) {
+            if (imageError.isNotEmpty()) {
+                Text(
+                    imageError,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+
             EditorField(
                 value = title,
                 onValueChange = { title = it; dirty = true },
                 placeholder = "Title",
+                readOnly = preview,
                 textStyle = LocalTextStyle.current.copy(
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
@@ -124,15 +175,46 @@ fun EditorScreen(
                 ),
                 modifier = Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 8.dp),
             )
-            EditorField(
-                value = body,
-                onValueChange = { body = it; dirty = true },
-                placeholder = "Start writing…",
-                textStyle = LocalTextStyle.current.copy(
-                    color = MaterialTheme.colorScheme.onBackground,
-                ),
-                modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 16.dp),
-            )
+
+            if (preview) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(bottom = 16.dp),
+                ) {
+                    if (body.isBlank()) {
+                        Text(
+                            "Nothing to preview yet.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        Markdown(
+                            content = body,
+                            imageTransformer = Coil3ImageTransformerImpl,
+                            colors = markdownColor(),
+                            typography = markdownTypography(),
+                        )
+                    }
+                }
+            } else {
+                EditorFieldWithSelection(
+                    value = body,
+                    selection = selection,
+                    onValueChange = { text, range ->
+                        body = text
+                        selection = range
+                        dirty = true
+                    },
+                    onSelectionChange = { selection = it },
+                    placeholder = "Start writing… markdown works: **bold**, # heading, - list",
+                    textStyle = LocalTextStyle.current.copy(
+                        color = MaterialTheme.colorScheme.onBackground,
+                    ),
+                    modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 16.dp),
+                )
+            }
         }
     }
 }
@@ -147,10 +229,55 @@ private fun EditorField(
     placeholder: String,
     textStyle: androidx.compose.ui.text.TextStyle,
     modifier: Modifier = Modifier,
+    readOnly: Boolean = false,
 ) {
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
+        readOnly = readOnly,
+        textStyle = textStyle,
+        cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+        modifier = modifier,
+        decorationBox = { inner ->
+            if (value.isEmpty()) {
+                Text(
+                    placeholder,
+                    style = textStyle.merge(
+                        SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    ),
+                )
+            }
+            inner()
+        },
+    )
+}
+
+/**
+ * Same field, but reporting the caret position — an inserted image has to land where
+ * the user was typing rather than at the end of the note.
+ */
+@Composable
+private fun EditorFieldWithSelection(
+    value: String,
+    selection: TextRange,
+    onValueChange: (String, TextRange) -> Unit,
+    onSelectionChange: (TextRange) -> Unit,
+    placeholder: String,
+    textStyle: androidx.compose.ui.text.TextStyle,
+    modifier: Modifier = Modifier,
+) {
+    // The field owns its own TextFieldValue so typing stays responsive, but it is
+    // rebuilt whenever the text changes underneath it (an image was just inserted).
+    val fieldValue = remember(value, selection) {
+        TextFieldValue(text = value, selection = selection)
+    }
+
+    BasicTextField(
+        value = fieldValue,
+        onValueChange = { next ->
+            if (next.text == value) onSelectionChange(next.selection)
+            else onValueChange(next.text, next.selection)
+        },
         textStyle = textStyle,
         cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
         modifier = modifier,
