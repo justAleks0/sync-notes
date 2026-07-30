@@ -298,6 +298,19 @@ function Editor({
               onEditImage={([start, end], markdown) =>
                 edit(() => setBody(body.slice(0, start) + markdown + body.slice(end)))
               }
+              onMoveImage={([start, end], to) => {
+                if (to >= start && to <= end) return
+                const markdown = body.slice(start, end)
+                const without = body.slice(0, start) + body.slice(end)
+                // Removing the image first shifts every later offset left by its length.
+                const target = to > end ? to - (end - start) : to
+                const before = without.slice(0, target)
+                // A blank line either side, or markdown folds the image into the
+                // neighbouring paragraph instead of giving it its own block.
+                const lead = before === '' || before.endsWith('\n\n') ? '' : '\n\n'
+                const next = `${before}${lead}${markdown}\n\n${without.slice(target)}`
+                edit(() => setBody(next.replace(/\n{3,}/g, '\n\n')))
+              }}
             />
           </div>
         ) : (

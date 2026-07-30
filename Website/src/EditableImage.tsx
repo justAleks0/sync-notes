@@ -15,6 +15,9 @@ type Props = {
   onChange?: (nextSrc: string) => void
   selected: boolean
   onSelect: () => void
+  /** Fired while this image is being dragged to a new spot in the note. */
+  onDragStart?: () => void
+  onDragEnd?: () => void
 }
 
 const PRESETS: { label: string; width: number | null }[] = [
@@ -24,7 +27,15 @@ const PRESETS: { label: string; width: number | null }[] = [
   { label: 'Full', width: null },
 ]
 
-export function EditableImage({ src, alt, onChange, selected, onSelect }: Props) {
+export function EditableImage({
+  src,
+  alt,
+  onChange,
+  selected,
+  onSelect,
+  onDragStart,
+  onDragEnd,
+}: Props) {
   const { url, meta } = parseImageSrc(src)
   const wrapRef = useRef<HTMLSpanElement>(null)
 
@@ -85,9 +96,15 @@ export function EditableImage({ src, alt, onChange, selected, onSelect }: Props)
     />
   )
 
+  const classes = [
+    'md-image',
+    `align-${meta.align}`,
+    meta.wrap ? 'wrap' : '',
+  ].filter(Boolean).join(' ')
+
   if (!editable) {
     return (
-      <span className={`md-image align-${meta.align}`}>
+      <span className={classes}>
         <span className="image-frame">{image}</span>
       </span>
     )
@@ -96,7 +113,14 @@ export function EditableImage({ src, alt, onChange, selected, onSelect }: Props)
   return (
     <span
       ref={wrapRef}
-      className={`md-image align-${meta.align} editable ${selected ? 'selected' : ''}`}
+      className={`${classes} editable ${selected ? 'selected' : ''}`}
+      draggable={selected}
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/x-syncnotes-image', 'move')
+        e.dataTransfer.effectAllowed = 'move'
+        onDragStart?.()
+      }}
+      onDragEnd={() => onDragEnd?.()}
       onClick={(e) => {
         e.stopPropagation()
         if (!selected) onSelect()
@@ -118,6 +142,23 @@ export function EditableImage({ src, alt, onChange, selected, onSelect }: Props)
               {value === 'left' ? '⇤' : value === 'center' ? '↔' : '⇥'}
             </button>
           ))}
+
+          <span className="toolbar-sep" />
+
+          <button
+            className={meta.wrap ? 'active' : ''}
+            disabled={meta.align === 'center'}
+            title={
+              meta.align === 'center'
+                ? 'Text cannot wrap down both sides of a centred image'
+                : meta.wrap
+                  ? 'Text wraps around this image — click for its own line'
+                  : 'Put text alongside this image'
+            }
+            onClick={() => commit({ wrap: !meta.wrap })}
+          >
+            Wrap
+          </button>
 
           <span className="toolbar-sep" />
 

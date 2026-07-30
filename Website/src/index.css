@@ -349,6 +349,42 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
 .md-image.align-center { text-align: center; }
 .md-image.align-right { text-align: right; }
 
+/* Wrap mode: float the image so the paragraph flows around it. This is the only
+   mechanism on the web that reflows text around an image - absolutely positioned
+   elements leave normal flow entirely and text runs underneath them. */
+.md-image.wrap {
+  display: inline;
+  width: auto;
+}
+.md-image.wrap .image-frame { display: block; }
+.md-image.wrap.align-left .image-frame {
+  float: left;
+  margin: 0.2em 1.2em 0.6em 0;
+}
+.md-image.wrap.align-right .image-frame {
+  float: right;
+  margin: 0.2em 0 0.6em 1.2em;
+}
+
+/* Floats escape their paragraph, so headings and rules that follow must clear them
+   rather than sliding up alongside. */
+.markdown h1, .markdown h2, .markdown h3,
+.markdown h4, .markdown h5, .markdown h6,
+.markdown hr, .markdown pre, .markdown table { clear: both; }
+
+/* Where a dragged image can be re-anchored. Zero height until a drag starts, so
+   the layout does not jump. */
+.image-drop-zone {
+  height: 10px;
+  margin: -5px 0;
+  border-radius: 3px;
+  transition: background 0.12s ease;
+}
+.image-drop-zone.over {
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(91, 140, 255, 0.6);
+}
+
 /* Inner frame shrink-wraps the image. Everything absolutely positioned — the
    toolbar and the resize handle — anchors to this, not the column. */
 .image-frame {
@@ -380,6 +416,9 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
   top: -44px;
   left: 50%;
   transform: translateX(-50%);
+  /* Centring is fine for a centred image, but on one pushed to an edge the toolbar
+     is wider than the image and would overhang the pane, forcing a horizontal
+     scrollbar. Anchor it to whichever edge the image is on instead. */
   z-index: 5;
   display: flex;
   align-items: center;
@@ -415,6 +454,9 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+
+.md-image.align-left .image-toolbar { left: 0; right: auto; transform: none; }
+.md-image.align-right .image-toolbar { left: auto; right: 0; transform: none; }
 
 /* GFM task lists: the checkbox replaces the bullet rather than sitting beside it. */
 .markdown li:has(> input[type="checkbox"]) {

@@ -140,9 +140,20 @@ renders, just at its natural size. The alternatives were worse — raw HTML is
 disabled on purpose, and the `![alt|420](…)` convention corrupts the alt text that
 screen readers depend on.
 
-Android reads the same fragment and renders to match, so a note looks the same on
-both. Editing the layout is desktop-only for now; dragging a resize handle is a
-mouse gesture.
+**Wrap** floats the image so the paragraph flows around it, Word-style. Drag a
+selected image to re-anchor it between blocks; drop targets light up as you go.
+
+Note what is *not* possible: dragging an image to an arbitrary x/y **and** having
+text reflow around it. Anything absolutely positioned leaves normal flow, so text
+ignores it and runs underneath. CSS Exclusions would have allowed both but no
+browser ships it. Float is the only mechanism on the web that reflows text around
+an image, so position is "which side, anchored where in the text" rather than
+free pixels.
+
+Android reads the same fragment for width and alignment, so a note looks the same
+on both — except wrapping, which Compose has no float equivalent for, so a wrapped
+image renders as its own block there. Editing the layout is desktop-only; dragging
+a resize handle is a mouse gesture.
 
 `Website/src/imageMeta.ts` and `Android App/…/ui/ImageLayout.kt` implement the same
 format and have to stay in step.

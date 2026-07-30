@@ -4,9 +4,15 @@ export type ImageMeta = {
   /** Rendered width in CSS pixels, or null for the image's natural size. */
   width: number | null
   align: ImageAlign
+  /**
+   * Float the image so surrounding text wraps around it, rather than sitting on
+   * its own line. Only meaningful for left/right — there is no such thing as
+   * text wrapping down both sides of a centred image.
+   */
+  wrap: boolean
 }
 
-export const DEFAULT_META: ImageMeta = { width: null, align: 'left' }
+export const DEFAULT_META: ImageMeta = { width: null, align: 'left', wrap: false }
 
 export const MIN_WIDTH = 60
 export const MAX_WIDTH = 2000
@@ -36,13 +42,17 @@ export function parseImageSrc(src: string): { url: string; meta: ImageMeta } {
   const align: ImageAlign =
     rawAlign === 'center' || rawAlign === 'right' ? rawAlign : 'left'
 
-  return { url, meta: { width, align } }
+  // A centred float is meaningless, so it can never be stored.
+  const wrap = params.get('wrap') === '1' && align !== 'center'
+
+  return { url, meta: { width, align, wrap } }
 }
 
 export function buildImageSrc(url: string, meta: ImageMeta): string {
   const params = new URLSearchParams()
   if (meta.width !== null) params.set('w', String(Math.round(meta.width)))
   if (meta.align !== 'left') params.set('align', meta.align)
+  if (meta.wrap && meta.align !== 'center') params.set('wrap', '1')
 
   const query = params.toString()
   return query ? `${url}#${query}` : url
