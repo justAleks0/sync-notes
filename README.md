@@ -97,6 +97,37 @@ device at once:
 adb install -r "Android App/app/build/outputs/apk/debug/app-debug.apk"
 ```
 
+## Updates
+
+On launch, each installed client asks
+`api.github.com/repos/justAleks0/sync-notes/releases/latest` whether its own
+compiled-in version is the newest, and picks the asset matching its platform
+(`.exe` for Windows, `.apk` for Android). Up to date means nothing is shown at all.
+Behind means a banner with a **Download now** button that downloads and installs.
+
+The website has no update check on purpose — a web app is already the newest version
+the moment it loads.
+
+Releasing is one command, and it is what keeps the tags and the compiled-in versions
+in agreement:
+
+```bash
+./scripts/release.ps1 -Version 0.2.0
+```
+
+It stamps the version into both `package.json` files and `build.gradle.kts`, builds
+the website, the Windows installer and the release APK, then tags, pushes, and
+creates the GitHub release with both artifacts attached. Add `-NoPublish` to build
+without releasing.
+
+Deliberately local rather than GitHub Actions: the APK is signed with this machine's
+debug keystore, and CI generates a fresh one on every run, so a CI-built APK could
+never install over an existing one. Move this to CI once there is a real release
+keystore stored in GitHub secrets.
+
+Android version codes are derived from the version name (`0.1.0` -> `100`,
+`1.2.3` -> `10203`), so they always increase without anyone tracking a separate number.
+
 ## Accounts
 
 An account can hold both sign-in methods at once. Settings → **Sign-in methods**

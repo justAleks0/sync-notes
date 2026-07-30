@@ -3,6 +3,7 @@ package com.justaleks.syncnotes.data
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -26,6 +27,8 @@ private const val LATEST_RELEASE = "https://api.github.com/repos/$REPO/releases/
  * something the user has to deal with while writing a note.
  */
 object UpdateChecker {
+
+    private const val TAG = "SyncNotesUpdate"
 
     fun currentVersion(context: Context): String =
         runCatching {
@@ -62,6 +65,9 @@ object UpdateChecker {
                 }
             }
             null
+        }.onFailure {
+            // Silent for the user, but not silent for us.
+            Log.w(TAG, "Update check failed", it)
         }.getOrNull()
     }
 

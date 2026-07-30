@@ -7,7 +7,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -57,7 +60,20 @@ private fun SyncNotesApp(viewModel: NotesViewModel = viewModel()) {
     val update by viewModel.update.collectAsStateWithLifecycle()
     val updateProgress by viewModel.updateProgress.collectAsStateWithLifecycle()
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    // The app draws edge-to-edge, so the top-level column normally sits under the
+    // status bar and each Scaffold insets its own app bar. Once the banner is on
+    // screen it becomes the topmost thing, so the column takes the status bar inset
+    // instead — windowInsetsPadding also consumes it, which stops the Scaffold below
+    // from padding for the same bar a second time.
+    val bannerVisible = update != null
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(
+                if (bannerVisible) Modifier.windowInsetsPadding(WindowInsets.statusBars)
+                else Modifier
+            )
+    ) {
         UpdateBanner(
             update = update,
             progress = updateProgress,
