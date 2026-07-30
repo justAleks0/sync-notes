@@ -24,6 +24,9 @@ function createWindow() {
     backgroundColor: '#0f1115',
     autoHideMenuBar: true,
     title: 'Sync Notes',
+    // Only needed when running from source. A packaged Windows build takes its
+    // taskbar and window icon from the icon compiled into the .exe.
+    ...(app.isPackaged ? {} : { icon: path.join(__dirname, 'build', 'icon.ico') }),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

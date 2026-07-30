@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="app_background">#FF0F1115</color>
+    <!-- Matches the panel colour in assets/icon.svg. -->
+    <color name="ic_launcher_background">#FF101528</color>
 </resources>

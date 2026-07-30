@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 200 200" role="img">
+  <title>Sync Notes</title>
+  <desc>Two note pages linked by looping sync arrows.</desc>
+  <rect x="0" y="0" width="200" height="200" rx="44" fill="#101528"/>
+  <rect x="48" y="36" width="66" height="86" rx="8" fill="#5c6784"/>
+  <rect x="59" y="50" width="44" height="9" rx="4.5" fill="#3ddc84"/>
+  <rect x="59" y="68" width="30" height="7" rx="3.5" fill="#c9d1e6"/>
+  <rect x="59" y="84" width="30" height="7" rx="3.5" fill="#c9d1e6"/>
+  <path d="M160 90 C 178 70, 170 44, 138 41" fill="none" stroke="#22b8f0" stroke-width="9" stroke-linecap="round"/>
+  <polygon points="126,41 142,32 142,50" fill="#22b8f0"/>
+  <path d="M42 110 C 24 130, 32 156, 64 159" fill="none" stroke="#3ddc84" stroke-width="9" stroke-linecap="round"/>
+  <polygon points="76,159 60,150 60,168" fill="#3ddc84"/>
+  <rect x="86" y="72" width="70" height="92" rx="8" fill="#eef2ff"/>
+  <rect x="98" y="88" width="46" height="9" rx="4.5" fill="#22b8f0"/>
+  <rect x="98" y="106" width="46" height="7" rx="3.5" fill="#9aa4c4"/>
+  <rect x="98" y="122" width="46" height="7" rx="3.5" fill="#9aa4c4"/>
+  <rect x="98" y="138" width="28" height="7" rx="3.5" fill="#9aa4c4"/>
+</svg>
