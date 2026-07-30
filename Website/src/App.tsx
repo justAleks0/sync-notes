@@ -91,9 +91,10 @@ function Notes({ user, onRefresh }: { user: User; onRefresh: () => Promise<void>
         </ul>
 
         <footer className="sidebar-foot">
-          <span className="muted" title={user.email ?? ''}>
+          <span className="account-name muted" title={user.email ?? ''}>
             {user.displayName || user.email}
           </span>
+          <span className="version muted" title="Installed version">v{__APP_VERSION__}</span>
           <button className="link" onClick={() => setShowProfile(true)}>Settings</button>
         </footer>
       </aside>

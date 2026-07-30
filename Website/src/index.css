@@ -187,10 +187,19 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
   border-top: 1px solid var(--line);
   font-size: 13px;
 }
-.sidebar-foot .muted {
+/* The name is the only part allowed to shrink — the version and Settings stay whole. */
+.sidebar-foot .account-name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.sidebar-foot .version {
+  flex: none;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
 }
 
 /* ---------- Editor ---------- */
