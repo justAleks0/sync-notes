@@ -185,15 +185,22 @@ function Editor({
     setDirty(true)
   }
 
-  /** Splices text in at the caret, so an image lands where the user was typing. */
+  /**
+   * Splices text in at the caret, so an image lands where the user was typing.
+   * An unfocused textarea reports a caret of 0, which would silently put the image
+   * before everything already written — so append instead unless it really has focus.
+   */
   function insertAtCaret(text: string) {
     const field = bodyRef.current
-    const at = field ? field.selectionStart : body.length
-    const next = `${body.slice(0, at)}${text}${body.slice(field ? field.selectionEnd : body.length)}`
-    edit(() => setBody(next))
+    const focused = field !== null && document.activeElement === field
+    const start = focused ? field.selectionStart : body.length
+    const end = focused ? field.selectionEnd : body.length
+
+    edit(() => setBody(`${body.slice(0, start)}${text}${body.slice(end)}`))
+
     requestAnimationFrame(() => {
       if (!field) return
-      const caret = at + text.length
+      const caret = start + text.length
       field.focus()
       field.setSelectionRange(caret, caret)
     })
