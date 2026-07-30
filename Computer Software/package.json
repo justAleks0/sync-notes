@@ -18,7 +18,7 @@
   },
   "build": {
     "appId": "com.justaleks.syncnotes",
-    "files": ["main.js", "server.js"],
+    "files": ["main.js", "server.js", "preload.js", "updater.js"],
     "extraResources": [{ "from": "../Website/dist", "to": "web" }],
     "win": { "target": "nsis" }
   }

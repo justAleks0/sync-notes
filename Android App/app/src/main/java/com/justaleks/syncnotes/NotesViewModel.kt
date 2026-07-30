@@ -1,11 +1,14 @@
 package com.justaleks.syncnotes
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
 import com.justaleks.syncnotes.data.Note
 import com.justaleks.syncnotes.data.NotesRepository
+import com.justaleks.syncnotes.data.UpdateChecker
+import com.justaleks.syncnotes.data.UpdateInfo
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -34,7 +37,7 @@ sealed interface AuthState {
 data class SettingsStatus(val error: String = "", val notice: String = "", val busy: Boolean = false)
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class NotesViewModel : ViewModel() {
+class NotesViewModel(app: Application) : AndroidViewModel(app) {
 
     // Profile edits mutate the FirebaseUser in place instead of emitting a new auth
     // state, so bumping this is what makes the UI notice them.
@@ -75,6 +78,37 @@ class NotesViewModel : ViewModel() {
     private val _needsReauth = MutableStateFlow(false)
     val needsReauth: StateFlow<Boolean> = _needsReauth.asStateFlow()
     private var pendingChange: (suspend () -> Unit)? = null
+
+    private val _update = MutableStateFlow<UpdateInfo?>(null)
+    val update: StateFlow<UpdateInfo?> = _update.asStateFlow()
+
+    /** Null until a download starts, then 0..100. */
+    private val _updateProgress = MutableStateFlow<Int?>(null)
+    val updateProgress: StateFlow<Int?> = _updateProgress.asStateFlow()
+
+    init {
+        // "Am I the newest version?" — asked once per launch. Silent if the answer is yes.
+        viewModelScope.launch {
+            _update.value = UpdateChecker.checkForUpdate(getApplication())
+        }
+    }
+
+    fun downloadAndInstallUpdate() {
+        val info = _update.value ?: return
+        viewModelScope.launch {
+            _updateProgress.value = 0
+            try {
+                val apk = UpdateChecker.downloadApk(getApplication(), info) { percent ->
+                    _updateProgress.value = percent
+                }
+                UpdateChecker.installApk(getApplication(), apk)
+            } catch (e: Exception) {
+                _settings.value = SettingsStatus(error = "Update failed: ${e.message}")
+            } finally {
+                _updateProgress.value = null
+            }
+        }
+    }
 
     private val uid: String? get() = (authState.value as? AuthState.SignedIn)?.uid
 

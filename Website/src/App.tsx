@@ -3,6 +3,7 @@ import type { User } from 'firebase/auth'
 import { useAuth } from './useAuth'
 import { SignIn } from './SignIn'
 import { Profile } from './Profile'
+import { UpdateBanner } from './UpdateBanner'
 import { createNote, deleteNote, saveNote, watchNotes, type Note } from './notes'
 
 const AUTOSAVE_DELAY_MS = 600
@@ -10,9 +11,18 @@ const AUTOSAVE_DELAY_MS = 600
 export default function App() {
   const { user, loading, refresh } = useAuth()
 
-  if (loading) return <div className="boot">Loading…</div>
-  if (!user) return <SignIn />
-  return <Notes user={user} onRefresh={refresh} />
+  return (
+    <>
+      <UpdateBanner />
+      {loading ? (
+        <div className="boot">Loading…</div>
+      ) : user ? (
+        <Notes user={user} onRefresh={refresh} />
+      ) : (
+        <SignIn />
+      )}
+    </>
+  )
 }
 
 function Notes({ user, onRefresh }: { user: User; onRefresh: () => Promise<void> }) {

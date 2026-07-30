@@ -1,6 +1,7 @@
 const path = require('node:path')
-const { app, shell, BrowserWindow } = require('electron')
+const { app, shell, ipcMain, BrowserWindow } = require('electron')
 const { serve } = require('./server')
+const { checkForUpdate, downloadUpdate } = require('./updater')
 
 // In a packaged build the web assets are copied into resources/web; in development
 // we point straight at the Vite output next door.
@@ -26,6 +27,7 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.js'),
     },
   })
 
@@ -50,6 +52,27 @@ function createWindow() {
 
   return win
 }
+
+ipcMain.handle('app:version', () => app.getVersion())
+
+ipcMain.handle('update:check', () => checkForUpdate(app.getVersion()))
+
+ipcMain.handle('update:install', async (event, downloadUrl) => {
+  // Only ever install something GitHub served us for this repo — the renderer
+  // shouldn't be able to talk us into running an arbitrary executable.
+  if (!/^https:\/\/github\.com\/justAleks0\/sync-notes\/releases\/download\//.test(downloadUrl)) {
+    throw new Error('Refused to download from an unexpected location.')
+  }
+
+  const installer = await downloadUpdate(downloadUrl, (percent) => {
+    event.sender.send('update:progress', percent)
+  })
+
+  // Windows can't overwrite the running app, so hand off and get out of the way.
+  shell.openPath(installer)
+  setTimeout(() => app.quit(), 1000)
+  return true
+})
 
 app.whenReady().then(async () => {
   appUrl = await serve(WEB_ROOT)

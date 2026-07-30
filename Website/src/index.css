@@ -17,6 +17,12 @@
 
 html, body, #root { height: 100%; margin: 0; }
 
+/* Column layout so the update banner can sit above the app without overflowing it. */
+#root { display: flex; flex-direction: column; }
+#root > .app,
+#root > .boot,
+#root > .signin-page { flex: 1; min-height: 0; height: auto; }
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -231,6 +237,74 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
   line-height: 1.6;
 }
 .title-input:focus, .body-input:focus { outline: none; }
+
+/* ---------- Update banner ---------- */
+
+.update-banner {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  background: linear-gradient(90deg, #1b2440, #241d3f);
+  border-bottom: 1px solid #3a4470;
+}
+.update-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.update-text .muted { font-size: 13px; }
+.update-text .error { font-size: 13px; }
+
+.update-button {
+  flex: none;
+  padding: 12px 26px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #5b8cff, #8a5bff);
+  box-shadow: 0 0 0 rgba(91, 140, 255, 0.7);
+  animation: update-pulse 2.4s ease-in-out infinite;
+}
+.update-button:hover:not(:disabled) {
+  filter: brightness(1.12);
+  animation-play-state: paused;
+}
+.update-button:disabled { animation: none; opacity: 0.85; }
+
+@keyframes update-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(91, 140, 255, 0.55); }
+  50% { box-shadow: 0 0 22px 4px rgba(138, 91, 255, 0.55); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update-button { animation: none; }
+}
+
+.update-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.update-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #5b8cff, #8a5bff);
+  transition: width 0.2s ease;
+}
+
+@media (max-width: 560px) {
+  .update-banner { flex-direction: column; align-items: stretch; gap: 10px; }
+  .update-button { width: 100%; }
+}
 
 /* ---------- Settings modal ---------- */
 
