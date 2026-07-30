@@ -92,8 +92,9 @@ finally { Pop-Location }
 
 $installer = Get-ChildItem "$root\Computer Software\dist" -Filter "*.exe" -File |
   Sort-Object LastWriteTime -Descending | Select-Object -First 1
-$apkBuilt = Get-ChildItem "$root\Android App\app\build\outputs\apk\release" -Filter "*.apk" -File |
-  Sort-Object LastWriteTime -Descending | Select-Object -First 1
+# Match Gradle's own output name, not "*.apk" - the renamed copy from a previous run
+# lives in the same folder and would otherwise win on timestamp.
+$apkBuilt = Get-Item "$root\Android App\app\build\outputs\apk\release\app-release.apk" -ErrorAction SilentlyContinue
 
 if (-not $installer) { throw "No .exe produced in Computer Software/dist" }
 if (-not $apkBuilt)  { throw "No .apk produced in Android App/app/build/outputs/apk/release" }
