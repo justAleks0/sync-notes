@@ -42,9 +42,10 @@ function Write-Text($path, $text) {
 
 function Set-VersionIn($path, $pattern, $label) {
   $text = Read-Text $path
-  $updated = $text -replace $pattern, "`${1}$Version`${2}"
-  if ($updated -eq $text) { throw "Version pattern did not match in $path" }
-  Write-Text $path $updated
+  # Guard against a silent no-op if the file is ever restructured. Text being
+  # unchanged is fine — that just means it is already at this version.
+  if ($text -notmatch $pattern) { throw "Version pattern did not match in $path" }
+  Write-Text $path ($text -replace $pattern, "`${1}$Version`${2}")
   Write-Host "  $label"
 }
 
