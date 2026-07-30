@@ -39,7 +39,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.mikepenz.markdown.coil3.Coil3ImageTransformerImpl
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
@@ -192,7 +191,9 @@ fun EditorScreen(
                     } else {
                         Markdown(
                             content = body,
-                            imageTransformer = Coil3ImageTransformerImpl,
+                            // Honours the width and alignment the web editor records
+                            // in the image URL fragment.
+                            imageTransformer = LayoutAwareImageTransformer,
                             colors = markdownColor(),
                             typography = markdownTypography(),
                         )

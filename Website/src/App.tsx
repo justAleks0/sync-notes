@@ -291,7 +291,14 @@ function Editor({
       {preview ? (
         body.trim() ? (
           <div className="body-preview">
-            <Markdown source={body} />
+            <Markdown
+              source={body}
+              // Splice by source offset rather than searching for the URL, so the
+              // right image is rewritten even if the same file appears twice.
+              onEditImage={([start, end], markdown) =>
+                edit(() => setBody(body.slice(0, start) + markdown + body.slice(end)))
+              }
+            />
           </div>
         ) : (
           <div className="body-preview placeholder">Nothing to preview yet.</div>

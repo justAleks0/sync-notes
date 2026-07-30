@@ -331,13 +331,89 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
 
 .markdown img {
   max-width: 100%;
-  /* Cap the height too, so a tall photo doesn't push the rest of the note off screen. */
-  max-height: 60vh;
-  width: auto;
   height: auto;
   border-radius: 10px;
+  display: inline-block;
+  vertical-align: top;
+}
+
+/* ---------- Images: alignment, selection, resizing ---------- */
+
+/* Outer wrapper is a full-width block purely so text-align can position the image. */
+.md-image {
   display: block;
   margin: 1em 0;
+  line-height: 0;
+}
+.md-image.align-left { text-align: left; }
+.md-image.align-center { text-align: center; }
+.md-image.align-right { text-align: right; }
+
+/* Inner frame shrink-wraps the image. Everything absolutely positioned — the
+   toolbar and the resize handle — anchors to this, not the column. */
+.image-frame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.md-image.editable img { cursor: pointer; }
+.md-image.editable:hover img { outline: 2px solid rgba(91, 140, 255, 0.4); outline-offset: 2px; }
+.md-image.selected img { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: -7px;
+  transform: translateX(50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.image-toolbar {
+  position: absolute;
+  top: -44px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  line-height: 1;
+  white-space: nowrap;
+}
+.image-toolbar button {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 13px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+}
+.image-toolbar button:hover { background: var(--line); }
+.image-toolbar button.active { background: var(--accent); color: #fff; }
+.toolbar-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--line);
+}
+.toolbar-size {
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* GFM task lists: the checkbox replaces the bullet rather than sitting beside it. */

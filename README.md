@@ -127,6 +127,26 @@ just holds a normal markdown image link to the download URL.
 
 10 MB limit per image, enforced client-side before upload and again in the rules.
 
+### Sizing and alignment
+
+Click an image in the preview on web or desktop and a toolbar appears: align left,
+centre or right, size presets, and a corner handle to drag the width. No typing
+pixel values.
+
+That layout is stored in the image URL's **fragment** — `…/photo.png#w=420&align=center`.
+A fragment is never sent to the server and is ignored when loading an image, so the
+link keeps working everywhere: paste the note into GitHub and the image still
+renders, just at its natural size. The alternatives were worse — raw HTML is
+disabled on purpose, and the `![alt|420](…)` convention corrupts the alt text that
+screen readers depend on.
+
+Android reads the same fragment and renders to match, so a note looks the same on
+both. Editing the layout is desktop-only for now; dragging a resize handle is a
+mouse gesture.
+
+`Website/src/imageMeta.ts` and `Android App/…/ui/ImageLayout.kt` implement the same
+format and have to stay in step.
+
 **Storage has to be enabled before any of this works.** Firebase Console →
 Storage → Get started. The bucket named in `google-services.json` does not exist
 until you do that, and new Firebase projects may need the Blaze plan to create one.
