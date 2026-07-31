@@ -230,6 +230,7 @@ fun AssistSheet(
         actionId: String?,
         images: List<NoteImage>,
         wantsEdits: Boolean,
+        describeIn: String?,
     ) -> Unit,
     onStop: () -> Unit,
     onReplace: (String) -> Unit,
@@ -345,6 +346,8 @@ fun AssistSheet(
             ) {
                 ACTIONS.forEach { action ->
                     val selected = state.actionId == action.id
+                    // Describing pictures needs pictures, and a model that can see them.
+                    val blocked = action.needsImages && attached.isEmpty()
                     AssistChip(
                         onClick = {
                             onRun(
@@ -352,9 +355,10 @@ fun AssistSheet(
                                 action.id,
                                 attached,
                                 action.result == AiResult.EDITS,
+                                if (action.needsImages) source else null,
                             )
                         },
-                        enabled = !state.running,
+                        enabled = !state.running && !blocked,
                         label = { Text(action.label) },
                         colors = if (selected) {
                             AssistChipDefaults.assistChipColors(
@@ -383,7 +387,7 @@ fun AssistSheet(
                 )
                 Button(
                     onClick = {
-                        onRun(buildCustomPrompt(custom, source), null, attached, false)
+                        onRun(buildCustomPrompt(custom, source), null, attached, false, null)
                     },
                     enabled = !state.running && custom.isNotBlank(),
                 ) { Text("Ask") }

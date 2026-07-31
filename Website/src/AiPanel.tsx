@@ -8,6 +8,7 @@ import {
   type AiAction,
 } from './ai/actions'
 import { applyEdits, parseEdits, statusOf, type SuggestedEdit } from './ai/edits'
+import { describeEdits, parseDescriptions } from './ai/describe'
 import { aiErrorMessage, streamCompletion, type StreamHandle } from './ai/providers'
 import { supportsVision } from './ai/models'
 import { extractImages, MAX_IMAGES } from './ai/vision'
@@ -208,11 +209,22 @@ export function AiPanel({
     try {
       await done
       if (picked?.result === 'edits') {
-        const parsed = parseEdits(collected)
+        // Descriptions come back keyed by image number and are turned into edits
+        // here, against the note's own text — see describeEdits.
+        let parsed: SuggestedEdit[] | null
+        if (picked.id === 'describe') {
+          const described = parseDescriptions(collected)
+          parsed = described === null ? null : describeEdits(source, attached, described)
+        } else {
+          parsed = parseEdits(collected)
+        }
+
         if (parsed === null) {
           // Fall back to showing the raw reply rather than claiming failure —
           // the text is usually still readable and useful.
           setError("Couldn't read that as a list of edits. The raw reply is below.")
+        } else if (parsed.length === 0 && picked.id === 'describe') {
+          setError('No descriptions came back for those images.')
         } else {
           setEdits(parsed)
           // Everything that can still be applied starts ticked: the common case
@@ -296,17 +308,31 @@ export function AiPanel({
       )}
 
       <div className="ai-actions">
-        {ACTIONS.map((item) => (
-          <button
-            key={item.id}
-            className={action?.id === item.id ? 'active' : ''}
-            title={item.hint}
-            disabled={running}
-            onClick={() => run(item.build(source, title), item)}
-          >
-            {item.label}
-          </button>
-        ))}
+        {ACTIONS.map((item) => {
+          // Describing pictures needs pictures, and a model that can see them.
+          const blocked = item.needsImages && attached.length === 0
+          const why = !item.needsImages
+            ? item.hint
+            : images.length === 0
+              ? 'This note has no images'
+              : !canSee
+                ? `${settings.model} can't read images`
+                : !withImages
+                  ? 'Tick "Show the images" first'
+                  : item.hint
+
+          return (
+            <button
+              key={item.id}
+              className={action?.id === item.id ? 'active' : ''}
+              title={why}
+              disabled={running || blocked}
+              onClick={() => run(item.build(source, title), item)}
+            >
+              {item.label}
+            </button>
+          )
+        })}
       </div>
 
       <form

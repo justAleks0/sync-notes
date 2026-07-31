@@ -81,6 +81,7 @@ fun EditorScreen(
         actionId: String?,
         images: List<NoteImage>,
         wantsEdits: Boolean,
+        describeIn: String?,
     ) -> Unit,
     onStopAssist: () -> Unit,
     onClearAssist: () -> Unit,

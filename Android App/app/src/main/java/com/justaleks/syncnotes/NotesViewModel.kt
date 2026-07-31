@@ -19,7 +19,9 @@ import com.justaleks.syncnotes.ai.NoteImage
 import com.justaleks.syncnotes.ai.SYSTEM_PROMPT
 import com.justaleks.syncnotes.ai.SuggestedEdit
 import com.justaleks.syncnotes.ai.aiErrorMessage
+import com.justaleks.syncnotes.ai.describeEdits
 import com.justaleks.syncnotes.ai.defaultModel
+import com.justaleks.syncnotes.ai.parseDescriptions
 import com.justaleks.syncnotes.ai.parseEdits
 import com.justaleks.syncnotes.data.ImageUploader
 import com.justaleks.syncnotes.data.Note
@@ -312,6 +314,8 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
         actionId: String?,
         images: List<NoteImage>,
         wantsEdits: Boolean = false,
+        /** Set for "Describe images", whose reply is keyed by image number. */
+        describeIn: String? = null,
     ) {
         val settings = aiSettings.value
         if (!settings.isConfigured) return
@@ -327,13 +331,26 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
                 _assist.update { current ->
                     if (!wantsEdits) return@update current.copy(running = false)
 
-                    val parsed = parseEdits(current.output)
+                    // Descriptions come back keyed by image number and are turned
+                    // into edits here, against the note's own text.
+                    val parsed = if (describeIn != null) {
+                        parseDescriptions(current.output)
+                            ?.let { describeEdits(describeIn, images, it) }
+                    } else {
+                        parseEdits(current.output)
+                    }
+
                     if (parsed == null) {
                         // Fall back to showing the raw reply rather than claiming
                         // failure — the text is usually still readable and useful.
                         current.copy(
                             running = false,
                             error = "Couldn't read that as a list of edits. The raw reply is below.",
+                        )
+                    } else if (parsed.isEmpty() && describeIn != null) {
+                        current.copy(
+                            running = false,
+                            error = "No descriptions came back for those images.",
                         )
                     } else {
                         current.copy(running = false, edits = parsed)

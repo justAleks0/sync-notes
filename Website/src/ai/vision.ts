@@ -28,6 +28,41 @@ const IMAGE_MD = /!\[([^\]]*)\]\(\s*(<[^>]+>|[^)\s]+)(?:\s+"[^"]*")?\s*\)/g
  * In this app every stored image is a Firebase Storage download URL, which is
  * exactly what that fetch needs.
  */
+/** One `![alt](src)` exactly as it appears, with where it appears. */
+export type ImageSpan = {
+  start: number
+  end: number
+  /** The whole `![alt](src)`, taken from the note itself. */
+  raw: string
+  alt: string
+  url: string
+}
+
+/**
+ * Every image occurrence, undeduplicated and with its position.
+ *
+ * The describe-images flow builds its edits from these rather than asking the
+ * model to quote the markdown back: a Firebase download URL is eighty characters
+ * of base64 and query string, and a model reproducing one exactly is a coin
+ * toss. Taking the text from the note means the edit always matches.
+ */
+export function imageSpans(markdown: string): ImageSpan[] {
+  const spans: ImageSpan[] = []
+
+  for (const match of markdown.matchAll(IMAGE_MD)) {
+    const raw = match[2].startsWith('<') ? match[2].slice(1, -1) : match[2]
+    spans.push({
+      start: match.index,
+      end: match.index + match[0].length,
+      raw: match[0],
+      alt: match[1],
+      url: parseImageSrc(raw).url,
+    })
+  }
+
+  return spans
+}
+
 export function extractImages(markdown: string): NoteImage[] {
   const found: NoteImage[] = []
   const seen = new Set<string>()

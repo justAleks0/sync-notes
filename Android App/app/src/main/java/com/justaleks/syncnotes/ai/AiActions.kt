@@ -11,6 +11,12 @@ data class AiAction(
     val label: String,
     val hint: String,
     val result: AiResult,
+    /**
+     * Only offered when the note has images the chosen model can actually see —
+     * the action is meaningless otherwise, and a model without vision would
+     * cheerfully invent descriptions from the alt text it was given.
+     */
+    val needsImages: Boolean = false,
     val build: (text: String, title: String) -> String,
 )
 
@@ -96,6 +102,14 @@ val ACTIONS: List<AiAction> = listOf(
                 "drop anything: every sentence in the note must still be present in your " +
                 "answer.\nReturn the complete note.\n\n---\n$text"
         },
+    ),
+    AiAction(
+        id = "describe",
+        label = "Describe images",
+        hint = "Alt text for each picture, offered one at a time",
+        result = AiResult.EDITS,
+        needsImages = true,
+        build = { text, _ -> buildDescribePrompt(text) },
     ),
     AiAction(
         id = "suggest",

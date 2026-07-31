@@ -1,3 +1,4 @@
+import { buildDescribePrompt } from './describe'
 import { buildEditPrompt } from './edits'
 
 export type AiAction = {
@@ -9,6 +10,12 @@ export type AiAction = {
    * as a list of individual edits to tick off.
    */
   result: 'replace' | 'append' | 'edits'
+  /**
+   * Only offered when the note has images the chosen model can actually see —
+   * the action is meaningless otherwise, and a model without vision would
+   * cheerfully invent descriptions from the alt text it was given.
+   */
+  needsImages?: true
   build: (text: string, title: string) => string
 }
 
@@ -95,6 +102,14 @@ export const ACTIONS: AiAction[] = [
         '---',
         text,
       ].join('\n'),
+  },
+  {
+    id: 'describe',
+    label: 'Describe images',
+    hint: 'Alt text for each picture, offered one at a time',
+    result: 'edits',
+    needsImages: true,
+    build: (text) => buildDescribePrompt(text),
   },
   {
     id: 'suggest',
