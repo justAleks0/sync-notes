@@ -65,7 +65,10 @@ object AiSettingsStore {
         _settings.value = AiSettings(
             enabled = prefs.getBoolean("enabled", false),
             provider = AiProvider.from(prefs.getString("provider", null)),
-            apiKey = prefs.getString("apiKey", "").orEmpty(),
+            // Trimmed on the way in: a key is almost always pasted, and a
+            // trailing newline makes an invalid HTTP header, which fails as a
+            // bare network error rather than anything that mentions the key.
+            apiKey = prefs.getString("apiKey", "").orEmpty().trim(),
             model = prefs.getString("model", "").orEmpty(),
         )
     }
@@ -75,7 +78,7 @@ object AiSettingsStore {
             .edit()
             .putBoolean("enabled", settings.enabled)
             .putString("provider", settings.provider.id)
-            .putString("apiKey", settings.apiKey)
+            .putString("apiKey", settings.apiKey.trim())
             .putString("model", settings.model)
             .apply()
         _settings.value = settings

@@ -36,7 +36,10 @@ export function loadAiSettings(): AiSettings {
     return {
       enabled: parsed.enabled === true,
       provider: parsed.provider === 'openai' ? 'openai' : 'anthropic',
-      apiKey: typeof parsed.apiKey === 'string' ? parsed.apiKey : '',
+      // Trimmed on the way in: a key is almost always pasted, and a trailing
+      // newline makes an invalid HTTP header, which fetch rejects as a bare
+      // network failure rather than anything that mentions the key.
+      apiKey: typeof parsed.apiKey === 'string' ? parsed.apiKey.trim() : '',
       model: typeof parsed.model === 'string' ? parsed.model : '',
     }
   } catch {
@@ -46,7 +49,7 @@ export function loadAiSettings(): AiSettings {
 }
 
 export function saveAiSettings(settings: AiSettings): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...settings, apiKey: settings.apiKey.trim() }))
   window.dispatchEvent(new Event(AI_SETTINGS_CHANGED))
 }
 

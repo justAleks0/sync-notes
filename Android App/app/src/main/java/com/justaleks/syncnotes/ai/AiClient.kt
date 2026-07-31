@@ -264,7 +264,7 @@ fun aiErrorMessage(e: Throwable): String = when {
         in 500..599 -> "The provider is having trouble. Try again."
         else -> vendorMessage(e.body) ?: "Something went wrong."
     }
-    e is IOException -> "Could not reach the provider. Check your connection."
+    e is IOException -> "Couldn't reach the provider. Check your connection, then try again."
     else -> e.message ?: "Something went wrong."
 }
 

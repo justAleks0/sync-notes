@@ -161,6 +161,16 @@ export function streamCompletion(
 
 /** Vendor errors are wordy and inconsistent; reduce them to something actionable. */
 export function aiErrorMessage(err: unknown): string {
+  if ((err as Error)?.name === 'AbortError') return ''
+
+  // Before the APIError branch, not after: APIConnectionError *extends* APIError
+  // and carries no status, so checking APIError first sent every connection
+  // failure to the default case and showed the SDK's bare "Connection error."
+  // The friendlier text below had been unreachable since it was written.
+  if (err instanceof Anthropic.APIConnectionError || err instanceof OpenAI.APIConnectionError) {
+    return "Couldn't reach the provider. Check your connection, then try again."
+  }
+
   if (err instanceof Anthropic.APIError || err instanceof OpenAI.APIError) {
     switch (err.status) {
       case 401:
@@ -182,11 +192,6 @@ export function aiErrorMessage(err: unknown): string {
         if (err.status && err.status >= 500) return 'The provider is having trouble. Try again.'
         return err.message
     }
-  }
-  if ((err as Error)?.name === 'AbortError') return ''
-  // A browser CORS failure surfaces as a bare network error with no status.
-  if (err instanceof Anthropic.APIConnectionError || err instanceof OpenAI.APIConnectionError) {
-    return 'Could not reach the provider. Check your connection.'
   }
   return (err as Error)?.message ?? 'Something went wrong.'
 }

@@ -162,6 +162,9 @@ export function AiPanel({
   // identical without something on screen that is visibly counting.
   const [elapsed, setElapsed] = useState(0)
   const stream = useRef<StreamHandle | null>(null)
+  // What the last run asked for, so a failure can be retried where it stands
+  // rather than sending the user back to Settings to prod something.
+  const lastRun = useRef<{ prompt: string; action: AiAction | null } | null>(null)
 
   useEffect(() => {
     if (!running) return
@@ -183,6 +186,7 @@ export function AiPanel({
 
   async function run(prompt: string, picked: AiAction | null) {
     if (!isConfigured(settings)) return
+    lastRun.current = { prompt, action: picked }
     setAction(picked)
     setOutput('')
     setError('')
@@ -351,7 +355,22 @@ export function AiPanel({
         <button type="submit" disabled={running || !custom.trim()}>Ask</button>
       </form>
 
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <p className="error">
+          {error}{' '}
+          {lastRun.current && !running && (
+            <button
+              className="link"
+              onClick={() => {
+                const again = lastRun.current
+                if (again) run(again.prompt, again.action)
+              }}
+            >
+              Try again
+            </button>
+          )}
+        </p>
+      )}
 
       {edits !== null ? (
         <EditList
