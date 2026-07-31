@@ -1,7 +1,7 @@
 {
   "name": "sync-notes-desktop",
   "productName": "Sync Notes",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Sync Notes desktop app",
   "author": "justaleks",
