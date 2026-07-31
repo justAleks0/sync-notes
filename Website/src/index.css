@@ -897,6 +897,47 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
   border-radius: 14px;
   overflow: hidden;
 }
+/* The key-sync dialogs carry their own padding: they are prose, not a form with
+   a header bar, and the wall of consequences is the point of them. */
+.modal.keysync {
+  padding: 22px;
+  gap: 14px;
+  overflow-y: auto;
+}
+.modal.keysync h2 { margin: 0; font-size: 18px; }
+.modal.keysync h3 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.modal.keysync section { margin: 0; }
+.modal.keysync p { margin: 0; font-size: 13.5px; line-height: 1.55; }
+.modal.keysync ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.modal.keysync ul li + li { margin-top: 6px; }
+.modal.keysync ul.risks li { color: var(--text); }
+.modal.keysync label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+}
+.modal.keysync label.row-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+.modal.keysync label.row-check input { accent-color: var(--accent); }
+.modal.keysync form { display: flex; flex-direction: column; gap: 14px; }
+.modal-foot { display: flex; gap: 8px; }
+
 .modal-head {
   display: flex;
   align-items: center;

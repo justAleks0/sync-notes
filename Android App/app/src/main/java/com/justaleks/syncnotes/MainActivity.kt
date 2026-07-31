@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,6 +72,7 @@ private fun SyncNotesApp(viewModel: NotesViewModel = viewModel()) {
     val aiModels by viewModel.aiModels.collectAsStateWithLifecycle()
     val assist by viewModel.assist.collectAsStateWithLifecycle()
     val revisions by viewModel.revisions.collectAsStateWithLifecycle()
+    val keySync by viewModel.keySync.collectAsStateWithLifecycle()
 
     // The app draws edge-to-edge, so the top-level column normally sits under the
     // status bar and each Scaffold insets its own app bar. Once the banner is on
@@ -104,6 +106,7 @@ private fun SyncNotesApp(viewModel: NotesViewModel = viewModel()) {
             aiModels = aiModels,
             assist = assist,
             revisions = revisions,
+            keySync = keySync,
             viewModel = viewModel,
         )
     }
@@ -123,6 +126,7 @@ private fun SyncNotesContent(
     aiModels: ModelChoices,
     assist: AssistState,
     revisions: List<Revision>?,
+    keySync: KeySyncState,
     viewModel: NotesViewModel,
 ) {
     // Credential Manager renders its account picker on an Activity, not a bare Context.
@@ -176,15 +180,22 @@ private fun SyncNotesContent(
 
             if (showSettings) {
                 BackHandler { closeSettings() }
+                // Ask the account whether an encrypted key is waiting, each time
+                // settings opens — another device may have added one since.
+                LaunchedEffect(Unit) { viewModel.refreshKeySync() }
                 SettingsScreen(
                     account = account,
                     status = settings,
                     needsReauth = needsReauth,
                     ai = aiSettings,
                     aiModels = aiModels,
+                    keySync = keySync,
                     onSaveAi = viewModel::saveAiSettings,
                     onLoadAiModels = viewModel::loadAiModels,
                     onForgetAiKey = viewModel::clearAiSettings,
+                    onStartKeySync = viewModel::startKeySync,
+                    onStopKeySync = viewModel::stopKeySync,
+                    onUnlockKey = viewModel::unlockKey,
                     onSaveName = viewModel::saveDisplayName,
                     onSetPassword = viewModel::setPassword,
                     onConfirmIdentity = viewModel::confirmIdentity,

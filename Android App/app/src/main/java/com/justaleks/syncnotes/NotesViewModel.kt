@@ -14,6 +14,7 @@ import com.justaleks.syncnotes.ai.AiProvider
 import com.justaleks.syncnotes.ai.AiSettings
 import com.justaleks.syncnotes.ai.AiSettingsStore
 import com.justaleks.syncnotes.ai.EDIT_SYSTEM_PROMPT
+import com.justaleks.syncnotes.ai.KeySync
 import com.justaleks.syncnotes.ai.NoteImage
 import com.justaleks.syncnotes.ai.SYSTEM_PROMPT
 import com.justaleks.syncnotes.ai.SuggestedEdit
@@ -57,6 +58,21 @@ sealed interface AuthState {
 
 /** Outcome of a settings change, surfaced as a message under the field. */
 data class SettingsStatus(val error: String = "", val notice: String = "", val busy: Boolean = false)
+
+/**
+ * State of the opt-in encrypted copy of the API key held in the account.
+ *
+ * Only whether the account holds an envelope. Whether *this* device can read it
+ * is a separate question, answered by the local settings — conflating the two is
+ * what made the unlock prompt unreachable on a device that had never seen the
+ * key, which is the only device that needs it.
+ */
+data class KeySyncState(
+    val stored: Boolean = false,
+    val busy: Boolean = false,
+    val notice: String = "",
+    val error: String = "",
+)
 
 /** What the model picker in Settings currently knows about the entered key. */
 data class ModelChoices(
@@ -195,6 +211,96 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearAiModels() {
         _aiModels.value = ModelChoices()
+    }
+
+    // ---------- Encrypted key sync (opt-in) ----------
+
+    private val _keySync = MutableStateFlow(KeySyncState())
+    val keySync: StateFlow<KeySyncState> = _keySync.asStateFlow()
+
+    /** Looks for an encrypted copy in the account whenever settings are opened. */
+    fun refreshKeySync() {
+        val uid = uid ?: return
+        viewModelScope.launch {
+            val blob = KeySync.load(uid)
+            _keySync.update { it.copy(stored = blob != null) }
+        }
+    }
+
+    fun startKeySync(passphrase: String) {
+        val uid = uid ?: return
+        val settings = aiSettings.value
+        if (settings.apiKey.isBlank()) return
+
+        viewModelScope.launch {
+            _keySync.value = KeySyncState(busy = true)
+            try {
+                val blob = KeySync.encrypt(
+                    settings.apiKey.trim(), passphrase, settings.provider, settings.model,
+                )
+                KeySync.save(uid, blob)
+                _keySync.value = KeySyncState(
+                    stored = true,
+                    notice = "Encrypted copy saved. Your other devices can unlock it with that passphrase.",
+                )
+            } catch (e: Exception) {
+                _keySync.value = KeySyncState(error = e.message ?: "Could not encrypt the key.")
+            }
+        }
+    }
+
+    fun stopKeySync() {
+        val uid = uid ?: return
+        viewModelScope.launch {
+            _keySync.value = KeySyncState(busy = true)
+            try {
+                KeySync.clear(uid)
+                _keySync.value = KeySyncState(notice = "Encrypted copy deleted from your account.")
+            } catch (e: Exception) {
+                _keySync.value = KeySyncState(
+                    stored = true,
+                    error = e.message ?: "Could not remove the stored copy.",
+                )
+            }
+        }
+    }
+
+    fun unlockKey(passphrase: String) {
+        val uid = uid ?: return
+        viewModelScope.launch {
+            _keySync.value = _keySync.value.copy(busy = true, error = "")
+            val blob = KeySync.load(uid)
+            if (blob == null) {
+                _keySync.value = KeySyncState(error = "There is no encrypted key stored any more.")
+                return@launch
+            }
+
+            val apiKey = KeySync.decrypt(blob, passphrase)
+            if (apiKey == null) {
+                _keySync.value = _keySync.value.copy(
+                    busy = false,
+                    error = "That passphrase didn't work.",
+                )
+                return@launch
+            }
+
+            saveAiSettings(
+                aiSettings.value.copy(
+                    enabled = true,
+                    provider = blob.provider,
+                    apiKey = apiKey,
+                    model = blob.model.ifEmpty { aiSettings.value.model },
+                )
+            )
+            _keySync.value = KeySyncState(
+                stored = true,
+                notice = "Key unlocked and saved on this device.",
+            )
+        }
+    }
+
+    fun clearKeySyncStatus() {
+        _keySync.update { it.copy(notice = "", error = "") }
     }
 
     /**

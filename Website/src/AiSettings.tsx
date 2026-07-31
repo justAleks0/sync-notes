@@ -8,13 +8,105 @@ import {
   saveAiSettings,
   type ProviderId,
 } from './ai/settings'
+import { KeySyncDialog, KeyUnlockDialog } from './KeySyncDialog'
+import {
+  clearSyncedKey,
+  decryptKey,
+  encryptKey,
+  loadSyncedKey,
+  saveSyncedKey,
+} from './ai/keySync'
 
-export function AiSettingsCard() {
+export function AiSettingsCard({ uid }: { uid: string }) {
   const [settings, setSettings] = useState(loadAiSettings)
   const [models, setModels] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+
+  // Whether an encrypted copy exists in the account. Whether *this* device can
+  // read it is a separate question, answered by settings.apiKey — conflating the
+  // two is what made the unlock prompt unreachable on a device that had never
+  // seen the key, which is the only device that needs it.
+  const [synced, setSynced] = useState(false)
+  const [showDialog, setShowDialog] = useState(false)
+  const [showUnlock, setShowUnlock] = useState(false)
+  const [syncBusy, setSyncBusy] = useState(false)
+  const [syncError, setSyncError] = useState('')
+
+  useEffect(() => {
+    let live = true
+    loadSyncedKey(uid)
+      .then((blob) => { if (live) setSynced(blob !== null) })
+      .catch(() => {})
+    return () => { live = false }
+  }, [uid])
+
+  async function startSyncing(passphrase: string) {
+    setSyncBusy(true)
+    setSyncError('')
+    try {
+      const blob = await encryptKey(
+        settings.apiKey.trim(),
+        passphrase,
+        settings.provider,
+        settings.model,
+      )
+      await saveSyncedKey(uid, blob)
+      setSynced(true)
+      setShowDialog(false)
+      setNotice('Encrypted copy saved. Your other devices can unlock it with that passphrase.')
+    } catch (err) {
+      setSyncError((err as Error)?.message ?? 'Could not encrypt the key.')
+    } finally {
+      setSyncBusy(false)
+    }
+  }
+
+  async function stopSyncing() {
+    setSyncBusy(true)
+    setSyncError('')
+    try {
+      await clearSyncedKey(uid)
+      setSynced(false)
+      setNotice('Encrypted copy deleted from your account.')
+    } catch (err) {
+      setSyncError((err as Error)?.message ?? 'Could not remove the stored copy.')
+    } finally {
+      setSyncBusy(false)
+    }
+  }
+
+  async function unlock(passphrase: string) {
+    setSyncBusy(true)
+    setSyncError('')
+    try {
+      const blob = await loadSyncedKey(uid)
+      if (!blob) {
+        setSyncError('There is no encrypted key stored any more.')
+        return
+      }
+      const apiKey = await decryptKey(blob, passphrase)
+      if (apiKey === null) {
+        setSyncError("That passphrase didn't work.")
+        return
+      }
+      setSettings((s) => ({
+        ...s,
+        apiKey,
+        provider: blob.provider,
+        model: blob.model || s.model,
+        enabled: true,
+      }))
+      setSynced(true)
+      setShowUnlock(false)
+      setNotice('Key unlocked and saved on this device.')
+    } catch (err) {
+      setSyncError((err as Error)?.message ?? 'Could not read the stored key.')
+    } finally {
+      setSyncBusy(false)
+    }
+  }
 
   const provider = PROVIDERS.find((p) => p.id === settings.provider)!
   const recommended = RECOMMENDED[settings.provider]
@@ -145,20 +237,68 @@ export function AiSettingsCard() {
           {notice && <p className="notice">{notice}</p>}
 
           <p className="muted hint">
-            Your key is stored on this device only — never in the notes database, so it
-            never syncs to your other devices and you'll enter it once per device.
-            Requests go straight from here to {provider.label}; nothing passes through
-            Sync Notes. Note content you run an action on is sent to them, and they bill
-            your account for it.{' '}
+            By default your key is stored on this device only — never in the notes
+            database — so you enter it once per device. Requests go straight from here to{' '}
+            {provider.label}; nothing passes through Sync Notes. Note content you run an
+            action on is sent to them, and they bill your account for it.{' '}
             <a href={provider.consoleUrl} target="_blank" rel="noreferrer noopener">
               Get a key
             </a>
           </p>
 
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={synced}
+              disabled={syncBusy || (!synced && !settings.apiKey.trim())}
+              onChange={(e) => (e.target.checked ? setShowDialog(true) : stopSyncing())}
+            />
+            <span>
+              Sync this key to my other devices, encrypted
+              {!settings.apiKey.trim() && !synced && ' — add a key first'}
+            </span>
+          </label>
+
+          {synced && (
+            <p className="muted hint">
+              An encrypted copy is in your account. Turning this off deletes it; the key
+              stays on this device.
+            </p>
+          )}
+
+          {/* The device this matters on is the one with an envelope in the account
+              and nothing local to open it with. */}
+          {synced && !settings.apiKey.trim() && (
+            <p className="muted hint">
+              This account has an encrypted key stored.{' '}
+              <button className="link" onClick={() => setShowUnlock(true)}>Unlock it here</button>
+            </p>
+          )}
+
+          {syncError && <p className="error">{syncError}</p>}
+
           {settings.apiKey && (
             <button className="link danger" onClick={forget}>Forget key on this device</button>
           )}
         </>
+      )}
+
+      {showDialog && (
+        <KeySyncDialog
+          busy={syncBusy}
+          error={syncError}
+          onConfirm={startSyncing}
+          onCancel={() => { setShowDialog(false); setSyncError('') }}
+        />
+      )}
+
+      {showUnlock && (
+        <KeyUnlockDialog
+          busy={syncBusy}
+          error={syncError}
+          onUnlock={unlock}
+          onCancel={() => { setShowUnlock(false); setSyncError('') }}
+        />
       )}
     </section>
   )

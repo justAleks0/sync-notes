@@ -249,7 +249,7 @@ export function Profile({ user, onRefresh, onClose }: Props) {
             )}
           </section>
 
-          <AiSettingsCard />
+          <AiSettingsCard uid={user.uid} />
 
           <button className="link danger signout" onClick={signOutUser}>Sign out</button>
         </div>

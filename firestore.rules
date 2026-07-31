@@ -16,6 +16,16 @@ service cloud.firestore {
         && request.resource.data.body.size() <= 100000;
     }
 
+    // The opt-in encrypted copy of the user's AI key, and nothing else.
+    //
+    // These rules keep other accounts out, but they are not what protects the key:
+    // the document holds a passphrase-encrypted envelope, so even a reader who got
+    // past this — or anyone with database access — sees ciphertext. That is the
+    // point of the design, and the reason this document is allowed to exist at all.
+    match /users/{uid}/private/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
     // Point-in-time snapshots of a note, for the history panel. Rules do not
     // cascade into subcollections, so this needs saying explicitly even though the
     // path already sits under the owner's user document.

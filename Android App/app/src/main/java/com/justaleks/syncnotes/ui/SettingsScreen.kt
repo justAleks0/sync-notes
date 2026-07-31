@@ -37,6 +37,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +50,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.justaleks.syncnotes.AuthState
+import com.justaleks.syncnotes.KeySyncState
 import com.justaleks.syncnotes.ModelChoices
 import com.justaleks.syncnotes.SettingsStatus
 import com.justaleks.syncnotes.ai.AiProvider
@@ -69,9 +71,13 @@ fun SettingsScreen(
     needsReauth: Boolean,
     ai: AiSettings,
     aiModels: ModelChoices,
+    keySync: KeySyncState,
     onSaveAi: (AiSettings) -> Unit,
     onLoadAiModels: (AiProvider, String) -> Unit,
     onForgetAiKey: () -> Unit,
+    onStartKeySync: (String) -> Unit,
+    onStopKeySync: () -> Unit,
+    onUnlockKey: (String) -> Unit,
     onSaveName: (String) -> Unit,
     onSetPassword: (String, Boolean) -> Unit,
     onConfirmIdentity: (String) -> Unit,
@@ -261,9 +267,13 @@ fun SettingsScreen(
             AiCard(
                 settings = ai,
                 choices = aiModels,
+                keySync = keySync,
                 onChange = onSaveAi,
                 onLoadModels = onLoadAiModels,
                 onForgetKey = onForgetAiKey,
+                onStartKeySync = onStartKeySync,
+                onStopKeySync = onStopKeySync,
+                onUnlockKey = onUnlockKey,
             )
 
             OutlinedButton(onClick = onSignOut) {
@@ -284,15 +294,28 @@ fun SettingsScreen(
 private fun AiCard(
     settings: AiSettings,
     choices: ModelChoices,
+    keySync: KeySyncState,
     onChange: (AiSettings) -> Unit,
     onLoadModels: (AiProvider, String) -> Unit,
     onForgetKey: () -> Unit,
+    onStartKeySync: (String) -> Unit,
+    onStopKeySync: () -> Unit,
+    onUnlockKey: (String) -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
     var key by remember(settings.apiKey) { mutableStateOf(settings.apiKey) }
     var keyVisible by remember { mutableStateOf(false) }
     var providerOpen by remember { mutableStateOf(false) }
     var modelOpen by remember { mutableStateOf(false) }
+    var showSyncDialog by remember { mutableStateOf(false) }
+    var showUnlockDialog by remember { mutableStateOf(false) }
+
+    // A successful unlock is signalled by the key arriving in settings, so that is
+    // what dismisses the dialog. Closing it from the button instead would also
+    // close it on a wrong passphrase, hiding the error it exists to show.
+    LaunchedEffect(settings.apiKey) {
+        if (settings.apiKey.isNotBlank()) showUnlockDialog = false
+    }
 
     SettingsCard("AI assistance") {
         Row(
@@ -472,11 +495,74 @@ private fun AiCard(
             }
         }
 
-        if (settings.apiKey.isNotEmpty()) {
-            TextButton(onClick = { key = ""; onForgetKey() }) {
-                Text("Forget key", color = MaterialTheme.colorScheme.error)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Sync this key to my other devices, encrypted",
+                    style = MaterialTheme.typography.bodyMedium)
+                if (keySync.stored) {
+                    Text(
+                        "An encrypted copy is in your account. Turning this off deletes it; " +
+                            "the key stays on this device.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else if (settings.apiKey.isBlank()) {
+                    Text(
+                        "Add a key first.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Switch(
+                checked = keySync.stored,
+                enabled = !keySync.busy && (keySync.stored || settings.apiKey.isNotBlank()),
+                onCheckedChange = { on -> if (on) showSyncDialog = true else onStopKeySync() },
+            )
+        }
+
+        // The device this matters on is the one with an envelope in the account and
+        // nothing local to open it with.
+        if (keySync.stored && settings.apiKey.isBlank()) {
+            TextButton(onClick = { showUnlockDialog = true }) {
+                Text("Unlock the synced key here")
             }
         }
+        if (keySync.notice.isNotEmpty()) {
+            Text(keySync.notice, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary)
+        }
+        if (keySync.error.isNotEmpty()) {
+            Text(keySync.error, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error)
+        }
+
+        if (settings.apiKey.isNotEmpty()) {
+            TextButton(onClick = { key = ""; onForgetKey() }) {
+                Text("Forget key on this device", color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+
+    if (showSyncDialog) {
+        KeySyncDialog(
+            busy = keySync.busy,
+            error = keySync.error,
+            onConfirm = { passphrase -> showSyncDialog = false; onStartKeySync(passphrase) },
+            onCancel = { showSyncDialog = false },
+        )
+    }
+    if (showUnlockDialog) {
+        KeyUnlockDialog(
+            busy = keySync.busy,
+            error = keySync.error,
+            onUnlock = onUnlockKey,
+            onCancel = { showUnlockDialog = false },
+        )
     }
 }
 
