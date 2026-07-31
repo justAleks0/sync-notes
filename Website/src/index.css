@@ -370,6 +370,27 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
 .md-image.align-center { text-align: center; }
 .md-image.align-right { text-align: right; }
 
+/* The description under an image. Sized to the image rather than the column, so a
+   small picture does not get a caption three times its width. */
+.image-caption {
+  display: block;
+  /* The frame shrink-wraps its image, and a long caption would otherwise stretch
+     it to the full column. Zero width keeps the caption out of that calculation;
+     min-width then fills whatever the image settled on. */
+  width: 0;
+  min-width: 100%;
+  margin-top: 6px;
+  /* .md-image kills line-height to stop the image gaining a descender gap; text
+     inside it has to put that back. */
+  line-height: 1.45;
+  font-size: 12.5px;
+  color: var(--muted);
+  text-align: left;
+  white-space: normal;
+}
+.md-image.align-center .image-caption { text-align: center; }
+.md-image.align-right .image-caption { text-align: right; }
+
 /* Wrap mode: float the image so the paragraph flows around it. This is the only
    mechanism on the web that reflows text around an image - absolutely positioned
    elements leave normal flow entirely and text runs underneath them. */

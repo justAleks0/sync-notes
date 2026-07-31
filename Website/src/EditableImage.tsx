@@ -90,11 +90,25 @@ export function EditableImage({
     <img
       src={url}
       alt={alt}
+      // The description is otherwise invisible: markdown alt text only surfaces
+      // when the image fails to load. Hovering is the least intrusive way to
+      // reach it for images that carry a caption and for those that do not.
+      title={alt || undefined}
       loading="lazy"
       draggable={false}
       style={width ? { width: `${width}px` } : undefined}
     />
   )
+
+  /**
+   * Alt text worth showing under the image.
+   *
+   * A description has spaces in it; "20260731052402" and "IMG_4032.png" do not.
+   * Uploads name themselves after the file, so captioning every image would put
+   * a wall of timestamps through notes that never asked for one — while a
+   * description someone deliberately added is exactly what they want to see.
+   */
+  const caption = /\s/.test(alt.trim()) ? alt.trim() : ''
 
   const classes = [
     'md-image',
@@ -105,7 +119,10 @@ export function EditableImage({
   if (!editable) {
     return (
       <span className={classes}>
-        <span className="image-frame">{image}</span>
+        <span className="image-frame">
+          {image}
+          {caption && <span className="image-caption">{caption}</span>}
+        </span>
       </span>
     )
   }
@@ -178,6 +195,7 @@ export function EditableImage({
       )}
 
       {image}
+      {caption && <span className="image-caption">{caption}</span>}
 
       {selected && (
         <span
