@@ -14,6 +14,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -47,6 +48,7 @@ import com.justaleks.syncnotes.AssistState
 import com.justaleks.syncnotes.ai.AiSettings
 import com.justaleks.syncnotes.ai.NoteImage
 import com.justaleks.syncnotes.data.Note
+import com.justaleks.syncnotes.data.Revision
 import kotlinx.coroutines.delay
 
 private const val AUTOSAVE_DELAY_MS = 600L
@@ -59,8 +61,17 @@ fun EditorScreen(
     imageError: String,
     aiSettings: AiSettings,
     assist: AssistState,
+    revisions: List<Revision>?,
     onSave: (title: String, body: String) -> Unit,
     onPickImage: (onInsert: (String) -> Unit) -> Unit,
+    onOpenHistory: () -> Unit,
+    onCloseHistory: () -> Unit,
+    onRestore: (
+        currentTitle: String,
+        currentBody: String,
+        revision: Revision,
+        onRestored: (String, String) -> Unit,
+    ) -> Unit,
     onRunAssist: (prompt: String, actionId: String?, images: List<NoteImage>) -> Unit,
     onStopAssist: () -> Unit,
     onClearAssist: () -> Unit,
@@ -77,6 +88,7 @@ fun EditorScreen(
     // the range has to be remembered rather than read back later.
     var assistScope by remember(note.id) { mutableStateOf<TextRange?>(null) }
     var showAssist by remember(note.id) { mutableStateOf(false) }
+    var showHistory by remember(note.id) { mutableStateOf(false) }
 
     // The last text handed to Firestore. A snapshot matching this is our own write
     // echoing back, not an edit from another device.
@@ -150,6 +162,14 @@ fun EditorScreen(
                         enabled = !uploading,
                     ) {
                         Icon(Icons.Default.Image, contentDescription = "Insert image")
+                    }
+                    IconButton(
+                        onClick = {
+                            showHistory = true
+                            onOpenHistory()
+                        },
+                    ) {
+                        Icon(Icons.Default.History, contentDescription = "Earlier versions")
                     }
                     if (aiSettings.isConfigured) {
                         IconButton(
@@ -284,6 +304,26 @@ fun EditorScreen(
                     dirty = true
                 },
                 onDismiss = { close() },
+            )
+        }
+
+        if (showHistory) {
+            HistorySheet(
+                revisions = revisions,
+                currentTitle = title,
+                currentBody = body,
+                onRestore = { revision ->
+                    onRestore(title, body, revision) { restoredTitle, restoredBody ->
+                        title = restoredTitle
+                        body = restoredBody
+                        dirty = true
+                    }
+                    showHistory = false
+                },
+                onDismiss = {
+                    showHistory = false
+                    onCloseHistory()
+                },
             )
         }
     }

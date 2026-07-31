@@ -32,6 +32,7 @@ import com.justaleks.syncnotes.ai.AiSettings
 import com.justaleks.syncnotes.ui.EditorScreen
 import com.justaleks.syncnotes.ui.NoteListScreen
 import com.justaleks.syncnotes.data.Note
+import com.justaleks.syncnotes.data.Revision
 import com.justaleks.syncnotes.ui.SettingsScreen
 import com.justaleks.syncnotes.ui.SignInScreen
 import com.justaleks.syncnotes.ui.UpdateBanner
@@ -69,6 +70,7 @@ private fun SyncNotesApp(viewModel: NotesViewModel = viewModel()) {
     val aiSettings by viewModel.aiSettings.collectAsStateWithLifecycle()
     val aiModels by viewModel.aiModels.collectAsStateWithLifecycle()
     val assist by viewModel.assist.collectAsStateWithLifecycle()
+    val revisions by viewModel.revisions.collectAsStateWithLifecycle()
 
     // The app draws edge-to-edge, so the top-level column normally sits under the
     // status bar and each Scaffold insets its own app bar. Once the banner is on
@@ -101,6 +103,7 @@ private fun SyncNotesApp(viewModel: NotesViewModel = viewModel()) {
             aiSettings = aiSettings,
             aiModels = aiModels,
             assist = assist,
+            revisions = revisions,
             viewModel = viewModel,
         )
     }
@@ -119,6 +122,7 @@ private fun SyncNotesContent(
     aiSettings: AiSettings,
     aiModels: ModelChoices,
     assist: AssistState,
+    revisions: List<Revision>?,
     viewModel: NotesViewModel,
 ) {
     // Credential Manager renders its account picker on an Activity, not a bare Context.
@@ -212,7 +216,15 @@ private fun SyncNotesContent(
                     imageError = imageError,
                     aiSettings = aiSettings,
                     assist = assist,
+                    revisions = revisions,
                     onSave = { title, body -> viewModel.saveNote(openNote.id, title, body) },
+                    onOpenHistory = { viewModel.openHistory(openNote.id) },
+                    onCloseHistory = viewModel::closeHistory,
+                    onRestore = { currentTitle, currentBody, revision, onRestored ->
+                        viewModel.restoreRevision(
+                            openNote.id, currentTitle, currentBody, revision, onRestored,
+                        )
+                    },
                     onRunAssist = viewModel::runAssist,
                     onStopAssist = viewModel::stopAssist,
                     onClearAssist = viewModel::clearAssist,

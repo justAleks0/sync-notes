@@ -185,6 +185,39 @@ npx firebase-tools deploy --only storage --project sync-notes-c252b
 Until then image uploads fail with a "Storage isn't set up" message; markdown works
 regardless.
 
+## Version history
+
+Every note keeps snapshots of itself at `users/{uid}/notes/{noteId}/revisions`, so
+the history follows the note between devices rather than being per-client. **History**
+in the editor (the clock icon on Android) lists them newest first with how much the
+note grew or shrank; tapping one previews it, and **Restore this version** writes it
+back.
+
+Restoring is itself undoable: the version you are leaving is checkpointed first, so
+it appears at the top of the list as the way back.
+
+**When a snapshot is taken.** Autosave fires after 600ms of quiet, which would mean
+thousands of entries if every save kept one. Instead a save keeps a snapshot when
+any of these hold:
+
+- nothing has been recorded for this note yet — so the text you started with is
+  never the thing you cannot get back to,
+- the last one is more than two minutes old, or
+- at least 200 characters appeared or vanished since it.
+
+The newest revision is cached per note, so the common case — deciding *not* to keep
+one — costs no reads at all.
+
+**Retention.** The 50 newest are kept. Pruning happens while the history list is
+open, where the documents have already been paid for and trimming the tail is free;
+a note whose history is never opened keeps growing, which at one snapshot per two
+minutes of active typing is a slow leak rather than a flood. Deleting a note deletes
+its revisions first — Firestore does not remove subcollections with their parent, and
+once the note document is gone nothing in the UI can reach them.
+
+Revisions are immutable: the rules allow create, read and delete, but no update.
+Restoring writes the *note*, never the revision.
+
 ## AI assistance (opt-in)
 
 Off by default. Settings → **AI assistance** → enable, pick a provider (Claude or

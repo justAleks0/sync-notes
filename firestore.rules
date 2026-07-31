@@ -16,6 +16,23 @@ service cloud.firestore {
         && request.resource.data.body.size() <= 100000;
     }
 
+    // Point-in-time snapshots of a note, for the history panel. Rules do not
+    // cascade into subcollections, so this needs saying explicitly even though the
+    // path already sits under the owner's user document.
+    //
+    // No update rule on purpose: a revision is what the note was at a moment in
+    // time. Restoring writes the note, never the revision.
+    match /users/{uid}/notes/{noteId}/revisions/{revisionId} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.title is string
+        && request.resource.data.body is string
+        && request.resource.data.title.size() <= 200
+        && request.resource.data.body.size() <= 100000;
+    }
+
     // Deny everything else by default.
     match /{document=**} {
       allow read, write: if false;

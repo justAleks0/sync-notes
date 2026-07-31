@@ -7,6 +7,8 @@ import { UpdateBanner } from './UpdateBanner'
 import { Markdown } from './Markdown'
 import { imageMarkdown, imageProblem, uploadErrorMessage, uploadImage } from './images'
 import { AiPanel, useAiSettings } from './AiPanel'
+import { HistoryPanel } from './HistoryPanel'
+import { recordRevision } from './revisions'
 import { isConfigured } from './ai/settings'
 import { createNote, deleteNote, saveNote, watchNotes, type Note } from './notes'
 
@@ -143,6 +145,7 @@ function Editor({
   const [uploadError, setUploadError] = useState('')
   const [dragging, setDragging] = useState(false)
   const [showAi, setShowAi] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
   const [aiScope, setAiScope] = useState<{ start: number; end: number } | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
@@ -174,6 +177,11 @@ function Editor({
     timer.current = setTimeout(() => {
       const sent = { title, body }
       saved.current = sent
+      // Offered on every save; it decides for itself whether this moment is worth
+      // keeping. The first call for a note always keeps one, so the text you
+      // started with is never the thing you cannot get back to. History is a
+      // convenience — a failure here must not look like the note failed to save.
+      recordRevision(uid, note.id, sent).catch(() => {})
       saveNote(uid, note.id, sent).then(() => {
         // Anything typed while the write was in flight is newer than what we just
         // sent. Clearing dirty here would declare it saved and let the next
@@ -306,6 +314,13 @@ function Editor({
           </button>
         )}
         <button
+          className={`editor-action ${showHistory ? 'active' : ''}`}
+          onClick={() => setShowHistory(!showHistory)}
+          title="Earlier versions of this note"
+        >
+          History
+        </button>
+        <button
           className={`editor-action ${preview ? 'active' : ''}`}
           onClick={() => setPreview(!preview)}
         >
@@ -406,6 +421,25 @@ function Editor({
               setBody(`${body.slice(0, at)}\n\n${text}\n\n${body.slice(at)}`.replace(/\n{3,}/g, '\n\n'))
             })
           }
+        />
+      )}
+
+      {showHistory && (
+        <HistoryPanel
+          uid={uid}
+          noteId={note.id}
+          current={{ title, body }}
+          onClose={() => setShowHistory(false)}
+          onRestore={async (revision) => {
+            // Checkpoint what is on screen before overwriting it, so restoring is
+            // itself undoable — the version you left appears at the top of the list.
+            await recordRevision(uid, note.id, { title, body }, true).catch(() => {})
+            edit(() => {
+              setTitle(revision.title)
+              setBody(revision.body)
+            })
+            setShowHistory(false)
+          }}
         />
       )}
     </div>

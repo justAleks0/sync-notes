@@ -11,6 +11,7 @@ import {
   Timestamp,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { deleteRevisions } from './revisions'
 
 export type Note = {
   id: string
@@ -64,6 +65,9 @@ export function saveNote(uid: string, id: string, fields: { title: string; body:
   return updateDoc(doc(notesCol(uid), id), { ...fields, updatedAt: serverTimestamp() })
 }
 
-export function deleteNote(uid: string, id: string) {
-  return deleteDoc(doc(notesCol(uid), id))
+export async function deleteNote(uid: string, id: string) {
+  // History first: if the note document goes and this fails, the revisions are
+  // orphaned with no path left in the UI to reach them.
+  await deleteRevisions(uid, id)
+  await deleteDoc(doc(notesCol(uid), id))
 }

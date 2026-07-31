@@ -20,6 +20,8 @@ import com.justaleks.syncnotes.ai.defaultModel
 import com.justaleks.syncnotes.data.ImageUploader
 import com.justaleks.syncnotes.data.Note
 import com.justaleks.syncnotes.data.NotesRepository
+import com.justaleks.syncnotes.data.Revision
+import com.justaleks.syncnotes.data.RevisionsRepository
 import com.justaleks.syncnotes.data.uploadErrorMessage
 import com.justaleks.syncnotes.data.UpdateChecker
 import com.justaleks.syncnotes.data.UpdateInfo
@@ -350,11 +352,67 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun saveNote(id: String, title: String, body: String) {
-        uid?.let { NotesRepository.saveNote(it, id, title, body) }
+        val uid = uid ?: return
+        NotesRepository.saveNote(uid, id, title, body)
+
+        // Offered on every save; it decides for itself whether this moment is worth
+        // keeping. History is a convenience — a failure here must never be allowed
+        // to look like the note itself failed to save.
+        viewModelScope.launch {
+            runCatching { RevisionsRepository.record(uid, id, title, body) }
+        }
     }
 
     fun deleteNote(id: String) {
-        uid?.let { NotesRepository.deleteNote(it, id) }
+        val uid = uid ?: return
+        viewModelScope.launch {
+            // History first: once the note document is gone there is no screen left
+            // that could reach its revisions to clean them up.
+            runCatching { RevisionsRepository.deleteAll(uid, id) }
+            NotesRepository.deleteNote(uid, id)
+        }
+    }
+
+    // ---------- Version history ----------
+
+    /** Which note's history is on screen, or null when the panel is closed. */
+    private val _historyFor = MutableStateFlow<String?>(null)
+
+    val revisions: StateFlow<List<Revision>?> = _historyFor
+        .flatMapLatest { noteId ->
+            val uid = uid
+            if (noteId == null || uid == null) flowOf(null)
+            else RevisionsRepository.revisions(uid, noteId)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    fun openHistory(noteId: String) {
+        _historyFor.value = noteId
+    }
+
+    fun closeHistory() {
+        _historyFor.value = null
+    }
+
+    /**
+     * Restores [revision] into the note, checkpointing what is on screen first so
+     * the restore is itself undoable. [onRestored] receives the text to show.
+     */
+    fun restoreRevision(
+        noteId: String,
+        currentTitle: String,
+        currentBody: String,
+        revision: Revision,
+        onRestored: (title: String, body: String) -> Unit,
+    ) {
+        val uid = uid ?: return
+        viewModelScope.launch {
+            runCatching {
+                RevisionsRepository.record(uid, noteId, currentTitle, currentBody, always = true)
+            }
+            onRestored(revision.title, revision.body)
+            closeHistory()
+        }
     }
 
     private fun authCall(block: suspend () -> Unit) {
