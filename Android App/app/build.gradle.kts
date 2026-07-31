@@ -88,6 +88,10 @@ dependencies {
     implementation(libs.google.identity.googleid)
 
     testImplementation(libs.junit)
+    // Android stubs out org.json for unit tests, so the parsers under test would
+    // throw rather than parse. This puts a working implementation on the test
+    // classpath only.
+    testImplementation(libs.json.jvm)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
 }
