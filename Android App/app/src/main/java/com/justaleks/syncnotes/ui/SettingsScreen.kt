@@ -18,7 +18,12 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +31,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -37,11 +43,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.justaleks.syncnotes.AuthState
+import com.justaleks.syncnotes.ModelChoices
 import com.justaleks.syncnotes.SettingsStatus
+import com.justaleks.syncnotes.ai.AiProvider
+import com.justaleks.syncnotes.ai.AiSettings
+import com.justaleks.syncnotes.ai.RECOMMENDED
+import com.justaleks.syncnotes.ai.findRecommendation
+import com.justaleks.syncnotes.ai.monthlyEstimate
+import com.justaleks.syncnotes.ai.supportsVision
 
 private const val PASSWORD_PROVIDER = "password"
 private const val GOOGLE_PROVIDER = "google.com"
@@ -52,6 +67,11 @@ fun SettingsScreen(
     account: AuthState.SignedIn,
     status: SettingsStatus,
     needsReauth: Boolean,
+    ai: AiSettings,
+    aiModels: ModelChoices,
+    onSaveAi: (AiSettings) -> Unit,
+    onLoadAiModels: (AiProvider, String) -> Unit,
+    onForgetAiKey: () -> Unit,
     onSaveName: (String) -> Unit,
     onSetPassword: (String, Boolean) -> Unit,
     onConfirmIdentity: (String) -> Unit,
@@ -238,9 +258,223 @@ fun SettingsScreen(
                 }
             }
 
+            AiCard(
+                settings = ai,
+                choices = aiModels,
+                onChange = onSaveAi,
+                onLoadModels = onLoadAiModels,
+                onForgetKey = onForgetAiKey,
+            )
+
             OutlinedButton(onClick = onSignOut) {
                 Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
                 Text("  Sign out")
+            }
+        }
+    }
+}
+
+/**
+ * Bring-your-own-key AI, off until it is switched on. The wording here matters as
+ * much as the controls: it is the user's key, their bill, and their note text
+ * leaving the device, so the card says so rather than burying it.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AiCard(
+    settings: AiSettings,
+    choices: ModelChoices,
+    onChange: (AiSettings) -> Unit,
+    onLoadModels: (AiProvider, String) -> Unit,
+    onForgetKey: () -> Unit,
+) {
+    val uriHandler = LocalUriHandler.current
+    var key by remember(settings.apiKey) { mutableStateOf(settings.apiKey) }
+    var keyVisible by remember { mutableStateOf(false) }
+    var providerOpen by remember { mutableStateOf(false) }
+    var modelOpen by remember { mutableStateOf(false) }
+
+    SettingsCard("AI assistance") {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Use your own API key to rewrite, summarise and continue notes.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(
+                checked = settings.enabled,
+                onCheckedChange = { onChange(settings.copy(enabled = it)) },
+            )
+        }
+
+        if (!settings.enabled) return@SettingsCard
+
+        Text(
+            "The key is stored on this phone only — never in your account — so it is " +
+                "separate from the one in the browser. Notes you run an action on are " +
+                "sent to the provider you pick.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        ExposedDropdownMenuBox(
+            expanded = providerOpen,
+            onExpandedChange = { providerOpen = it },
+        ) {
+            OutlinedTextField(
+                value = settings.provider.label,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Provider") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(providerOpen) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+            )
+            ExposedDropdownMenu(
+                expanded = providerOpen,
+                onDismissRequest = { providerOpen = false },
+            ) {
+                AiProvider.entries.forEach { provider ->
+                    DropdownMenuItem(
+                        text = { Text(provider.label) },
+                        onClick = {
+                            providerOpen = false
+                            // The model list belongs to the old provider, and so does
+                            // the key — clear both rather than send one to the other.
+                            onChange(settings.copy(provider = provider, model = ""))
+                        },
+                    )
+                }
+            }
+        }
+
+        OutlinedTextField(
+            value = key,
+            onValueChange = { key = it },
+            label = { Text("API key") },
+            placeholder = { Text(settings.provider.keyHint) },
+            singleLine = true,
+            visualTransformation = if (keyVisible) VisualTransformation.None
+            else PasswordVisualTransformation(),
+            trailingIcon = {
+                TextButton(onClick = { keyVisible = !keyVisible }) {
+                    Text(if (keyVisible) "Hide" else "Show")
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = {
+                    onChange(settings.copy(apiKey = key.trim()))
+                    onLoadModels(settings.provider, key.trim())
+                },
+                enabled = key.isNotBlank() && !choices.loading,
+            ) { Text(if (choices.loading) "Checking…" else "Save & load models") }
+
+            TextButton(onClick = { uriHandler.openUri(settings.provider.consoleUrl) }) {
+                Text("Get a key")
+            }
+        }
+
+        if (choices.error.isNotEmpty()) {
+            Text(
+                choices.error,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+
+        if (choices.models.isNotEmpty()) {
+            val recommended = RECOMMENDED.getValue(settings.provider)
+                .filter { choices.models.contains(it.id) }
+            val rest = choices.models.filterNot { id -> recommended.any { it.id == id } }
+
+            ExposedDropdownMenuBox(
+                expanded = modelOpen,
+                onExpandedChange = { modelOpen = it },
+            ) {
+                OutlinedTextField(
+                    value = settings.model.ifEmpty { "Pick a model" },
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Model") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(modelOpen) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                )
+                ExposedDropdownMenu(
+                    expanded = modelOpen,
+                    onDismissRequest = { modelOpen = false },
+                ) {
+                    recommended.forEach { recommendation ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(recommendation.label)
+                                    Text(
+                                        monthlyEstimate(recommendation),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            },
+                            onClick = {
+                                modelOpen = false
+                                onChange(settings.copy(model = recommendation.id))
+                            },
+                        )
+                    }
+                    if (rest.isNotEmpty()) {
+                        HorizontalDivider()
+                        Text(
+                            "All chat models",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                        )
+                        rest.forEach { id ->
+                            DropdownMenuItem(
+                                text = { Text(id) },
+                                onClick = {
+                                    modelOpen = false
+                                    onChange(settings.copy(model = id))
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+
+            findRecommendation(settings.provider, settings.model)?.let { recommendation ->
+                Text(
+                    recommendation.note,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (settings.model.isNotEmpty() &&
+                !supportsVision(settings.provider, settings.model)
+            ) {
+                Text(
+                    "This model can't read the images in a note — only the text.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        if (settings.apiKey.isNotEmpty()) {
+            TextButton(onClick = { key = ""; onForgetKey() }) {
+                Text("Forget key", color = MaterialTheme.colorScheme.error)
             }
         }
     }

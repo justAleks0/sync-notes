@@ -11,6 +11,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
@@ -42,6 +43,9 @@ import androidx.compose.ui.unit.sp
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
+import com.justaleks.syncnotes.AssistState
+import com.justaleks.syncnotes.ai.AiSettings
+import com.justaleks.syncnotes.ai.NoteImage
 import com.justaleks.syncnotes.data.Note
 import kotlinx.coroutines.delay
 
@@ -53,8 +57,13 @@ fun EditorScreen(
     note: Note,
     uploading: Boolean,
     imageError: String,
+    aiSettings: AiSettings,
+    assist: AssistState,
     onSave: (title: String, body: String) -> Unit,
     onPickImage: (onInsert: (String) -> Unit) -> Unit,
+    onRunAssist: (prompt: String, actionId: String?, images: List<NoteImage>) -> Unit,
+    onStopAssist: () -> Unit,
+    onClearAssist: () -> Unit,
     onBack: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -64,6 +73,10 @@ fun EditorScreen(
     var preview by remember(note.id) { mutableStateOf(false) }
     // Tracked so an uploaded image can be spliced in where the user was typing.
     var selection by remember(note.id) { mutableStateOf(TextRange(0)) }
+    // Captured when the sheet opens: the field loses its selection to the sheet, so
+    // the range has to be remembered rather than read back later.
+    var assistScope by remember(note.id) { mutableStateOf<TextRange?>(null) }
+    var showAssist by remember(note.id) { mutableStateOf(false) }
 
     // Adopt edits that arrived from another device, but never clobber what the
     // user is actively typing here.
@@ -125,6 +138,16 @@ fun EditorScreen(
                         enabled = !uploading,
                     ) {
                         Icon(Icons.Default.Image, contentDescription = "Insert image")
+                    }
+                    if (aiSettings.isConfigured) {
+                        IconButton(
+                            onClick = {
+                                assistScope = selection.takeIf { !it.collapsed }
+                                showAssist = true
+                            },
+                        ) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = "Assist")
+                        }
                     }
                     IconButton(onClick = { preview = !preview }) {
                         Icon(
@@ -216,6 +239,40 @@ fun EditorScreen(
                     modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 16.dp),
                 )
             }
+        }
+
+        if (showAssist) {
+            val scope = assistScope
+            fun close() {
+                showAssist = false
+                assistScope = null
+                onClearAssist()
+            }
+
+            AssistSheet(
+                state = assist,
+                settings = aiSettings,
+                title = title,
+                source = scope?.let { body.substring(it.min, it.max) } ?: body,
+                scopeIsSelection = scope != null,
+                onRun = onRunAssist,
+                onStop = onStopAssist,
+                onReplace = { text ->
+                    body = if (scope != null) {
+                        body.substring(0, scope.min) + text + body.substring(scope.max)
+                    } else {
+                        text
+                    }
+                    dirty = true
+                },
+                onAppend = { text ->
+                    val at = scope?.max ?: body.length
+                    body = (body.substring(0, at) + "\n\n" + text + "\n\n" + body.substring(at))
+                        .replace(Regex("\n{3,}"), "\n\n")
+                    dirty = true
+                },
+                onDismiss = { close() },
+            )
         }
     }
 }

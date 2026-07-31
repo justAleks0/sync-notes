@@ -9,13 +9,23 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
+import com.justaleks.syncnotes.ai.AiClient
+import com.justaleks.syncnotes.ai.AiProvider
+import com.justaleks.syncnotes.ai.AiSettings
+import com.justaleks.syncnotes.ai.AiSettingsStore
+import com.justaleks.syncnotes.ai.NoteImage
+import com.justaleks.syncnotes.ai.SYSTEM_PROMPT
+import com.justaleks.syncnotes.ai.aiErrorMessage
+import com.justaleks.syncnotes.ai.defaultModel
 import com.justaleks.syncnotes.data.ImageUploader
 import com.justaleks.syncnotes.data.Note
 import com.justaleks.syncnotes.data.NotesRepository
 import com.justaleks.syncnotes.data.uploadErrorMessage
 import com.justaleks.syncnotes.data.UpdateChecker
 import com.justaleks.syncnotes.data.UpdateInfo
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +36,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 sealed interface AuthState {
@@ -41,6 +52,22 @@ sealed interface AuthState {
 
 /** Outcome of a settings change, surfaced as a message under the field. */
 data class SettingsStatus(val error: String = "", val notice: String = "", val busy: Boolean = false)
+
+/** What the model picker in Settings currently knows about the entered key. */
+data class ModelChoices(
+    val models: List<String> = emptyList(),
+    val loading: Boolean = false,
+    val error: String = "",
+)
+
+/** One run of the assistant, streamed into [output] as it arrives. */
+data class AssistState(
+    val running: Boolean = false,
+    val output: String = "",
+    val error: String = "",
+    /** Which action button is lit, or null for a custom instruction. */
+    val actionId: String? = null,
+)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class NotesViewModel(app: Application) : AndroidViewModel(app) {
@@ -118,6 +145,85 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
         _imageError.value = ""
     }
 
+    // ---------- AI assistance ----------
+
+    val aiSettings: StateFlow<AiSettings> = AiSettingsStore.settings
+
+    private val _aiModels = MutableStateFlow(ModelChoices())
+    val aiModels: StateFlow<ModelChoices> = _aiModels.asStateFlow()
+
+    private val _assist = MutableStateFlow(AssistState())
+    val assist: StateFlow<AssistState> = _assist.asStateFlow()
+    private var assistJob: Job? = null
+
+    fun saveAiSettings(settings: AiSettings) =
+        AiSettingsStore.save(getApplication(), settings)
+
+    fun clearAiSettings() {
+        AiSettingsStore.clear(getApplication())
+        _aiModels.value = ModelChoices()
+    }
+
+    /** Asks the provider which models this key can actually use. */
+    fun loadAiModels(provider: AiProvider, apiKey: String) {
+        if (apiKey.isBlank()) return
+        viewModelScope.launch {
+            _aiModels.value = ModelChoices(loading = true)
+            try {
+                val models = AiClient.listModels(provider, apiKey)
+                _aiModels.value = ModelChoices(models = models)
+                // Nothing chosen yet, or a model that belongs to the other provider.
+                val current = aiSettings.value
+                if (current.model.isBlank() || current.model !in models) {
+                    saveAiSettings(current.copy(model = defaultModel(provider, models)))
+                }
+            } catch (e: Exception) {
+                _aiModels.value = ModelChoices(error = aiErrorMessage(e))
+            }
+        }
+    }
+
+    fun clearAiModels() {
+        _aiModels.value = ModelChoices()
+    }
+
+    /**
+     * Runs one assist action. Output streams into [assist]; nothing is ever written
+     * to the note until the user picks where it goes.
+     */
+    fun runAssist(prompt: String, actionId: String?, images: List<NoteImage>) {
+        val settings = aiSettings.value
+        if (!settings.isConfigured) return
+
+        assistJob?.cancel()
+        assistJob = viewModelScope.launch {
+            _assist.value = AssistState(running = true, actionId = actionId)
+            try {
+                AiClient.stream(settings, SYSTEM_PROMPT, prompt, images) { chunk ->
+                    _assist.update { it.copy(output = it.output + chunk) }
+                }
+                _assist.update { it.copy(running = false) }
+            } catch (e: CancellationException) {
+                // Stop keeps whatever streamed so far — it is often enough to use.
+                _assist.update { it.copy(running = false) }
+                throw e
+            } catch (e: Exception) {
+                _assist.update { it.copy(running = false, error = aiErrorMessage(e)) }
+            }
+        }
+    }
+
+    fun stopAssist() {
+        assistJob?.cancel()
+        assistJob = null
+    }
+
+    /** Called when the assist sheet closes, so the next note starts clean. */
+    fun clearAssist() {
+        stopAssist()
+        _assist.value = AssistState()
+    }
+
     private val _update = MutableStateFlow<UpdateInfo?>(null)
     val update: StateFlow<UpdateInfo?> = _update.asStateFlow()
 
@@ -126,6 +232,10 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
     val updateProgress: StateFlow<Int?> = _updateProgress.asStateFlow()
 
     init {
+        // The key lives in this device's own preferences, so it has to be read off
+        // disk before anything can ask whether the assistant is configured.
+        AiSettingsStore.load(getApplication())
+
         // "Am I the newest version?" — asked once per launch. Silent if the answer is yes.
         viewModelScope.launch {
             _update.value = UpdateChecker.checkForUpdate(getApplication())

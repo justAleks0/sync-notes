@@ -1,19 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+   Backup and transfer rules for Android 12 and newer.
 -->
 <data-extraction-rules>
-    <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
-    </cloud-backup>
     <!--
-    <device-transfer>
-        <include .../>
-        <exclude .../>
-    </device-transfer>
+       The AI settings hold the user's own API key - a billable credential. Keeping
+       it on the device is the whole point of storing it locally, so it is excluded
+       from both cloud backup and phone-to-phone transfer. The cost is entering the
+       key once per device; the alternative is a working key travelling somewhere
+       the user never chose to send it.
     -->
+    <cloud-backup>
+        <exclude domain="sharedpref" path="sync-notes-ai.xml"/>
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="sync-notes-ai.xml"/>
+    </device-transfer>
 </data-extraction-rules>

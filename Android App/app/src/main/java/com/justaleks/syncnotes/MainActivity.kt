@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.justaleks.syncnotes.ai.AiSettings
 import com.justaleks.syncnotes.ui.EditorScreen
 import com.justaleks.syncnotes.ui.NoteListScreen
 import com.justaleks.syncnotes.data.Note
@@ -65,6 +66,9 @@ private fun SyncNotesApp(viewModel: NotesViewModel = viewModel()) {
     val updateProgress by viewModel.updateProgress.collectAsStateWithLifecycle()
     val imageUploading by viewModel.imageUploading.collectAsStateWithLifecycle()
     val imageError by viewModel.imageError.collectAsStateWithLifecycle()
+    val aiSettings by viewModel.aiSettings.collectAsStateWithLifecycle()
+    val aiModels by viewModel.aiModels.collectAsStateWithLifecycle()
+    val assist by viewModel.assist.collectAsStateWithLifecycle()
 
     // The app draws edge-to-edge, so the top-level column normally sits under the
     // status bar and each Scaffold insets its own app bar. Once the banner is on
@@ -94,6 +98,9 @@ private fun SyncNotesApp(viewModel: NotesViewModel = viewModel()) {
             needsReauth = needsReauth,
             imageUploading = imageUploading,
             imageError = imageError,
+            aiSettings = aiSettings,
+            aiModels = aiModels,
+            assist = assist,
             viewModel = viewModel,
         )
     }
@@ -109,6 +116,9 @@ private fun SyncNotesContent(
     needsReauth: Boolean,
     imageUploading: Boolean,
     imageError: String,
+    aiSettings: AiSettings,
+    aiModels: ModelChoices,
+    assist: AssistState,
     viewModel: NotesViewModel,
 ) {
     // Credential Manager renders its account picker on an Activity, not a bare Context.
@@ -166,6 +176,11 @@ private fun SyncNotesContent(
                     account = account,
                     status = settings,
                     needsReauth = needsReauth,
+                    ai = aiSettings,
+                    aiModels = aiModels,
+                    onSaveAi = viewModel::saveAiSettings,
+                    onLoadAiModels = viewModel::loadAiModels,
+                    onForgetAiKey = viewModel::clearAiSettings,
                     onSaveName = viewModel::saveDisplayName,
                     onSetPassword = viewModel::setPassword,
                     onConfirmIdentity = viewModel::confirmIdentity,
@@ -195,7 +210,12 @@ private fun SyncNotesContent(
                     note = openNote,
                     uploading = imageUploading,
                     imageError = imageError,
+                    aiSettings = aiSettings,
+                    assist = assist,
                     onSave = { title, body -> viewModel.saveNote(openNote.id, title, body) },
+                    onRunAssist = viewModel::runAssist,
+                    onStopAssist = viewModel::stopAssist,
+                    onClearAssist = viewModel::clearAssist,
                     onPickImage = { onInsert ->
                         pendingInsert = onInsert
                         pickImage.launch(

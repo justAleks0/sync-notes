@@ -1,13 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+   Backup rules for Android 11 and older. See data_extraction_rules.xml for 12+.
 -->
 <full-backup-content>
     <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+       The AI settings hold the user's own API key - a billable credential. It is
+       kept on this device deliberately, so it must not ride out to Google's backup
+       either; a restore onto a stranger's phone would hand over a working key.
+    -->
+    <exclude domain="sharedpref" path="sync-notes-ai.xml"/>
 </full-backup-content>

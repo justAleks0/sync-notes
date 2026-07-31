@@ -221,18 +221,41 @@ structure, suggest edits, or a free-form instruction. It acts on the selected
 text if there is one, otherwise the whole note. Results stream in and are **never
 applied automatically** — you choose Replace, Insert below, or Copy.
 
-**Where the key lives, and why.** It is stored in `localStorage` on the device
-you entered it on, deliberately **not** in Firestore. An API key is a billable
-credential: syncing it would write it to a server, replicate it to every device,
-and leave it in each one's offline cache, so anyone reaching the account would
-get a working key rather than just some notes. The cost of that choice is real —
-you enter the key once per device.
+All three clients have it: the web and desktop apps show a panel in the corner of
+the editor, Android a bottom sheet behind the ✨ button. Same actions, same
+prompts, same rule about never writing to the note on its own.
 
-Requests go straight from the browser to the provider; nothing passes through
-Sync Notes or Firebase. Both SDKs need an explicit browser opt-in
+### Images
+
+If the note has images, they are sent to the model as images rather than as bare
+URLs, labelled with their alt text and in the order they appear — so "summarise
+this" doesn't silently ignore half a note that is mostly pictures. A tick-box
+turns that off, and it is replaced by an explanation when the chosen model can't
+read images (a text-only model rejects the whole request rather than ignoring the
+picture, which would take the note's words down with it). Capped at 8 images per
+request.
+
+The URLs are handed over as-is, because both providers fetch them from their own
+servers — which does mean the Firebase Storage link, token included, reaches the
+provider. Downloading and re-encoding them client-side was the alternative, and it
+would need a CORS policy on the bucket that nothing else here requires.
+
+**Where the key lives, and why.** It is stored on the device you entered it on —
+`localStorage` in the browser, app-private preferences on Android — deliberately
+**not** in Firestore. An API key is a billable credential: syncing it would write
+it to a server, replicate it to every device, and leave it in each one's offline
+cache, so anyone reaching the account would get a working key rather than just
+some notes. The cost of that choice is real — you enter the key once per device.
+On Android it is also excluded from cloud backup and phone-to-phone transfer, for
+the same reason.
+
+Requests go straight from the client to the provider; nothing passes through Sync
+Notes or Firebase. In the browser both SDKs need an explicit opt-in
 (`dangerouslyAllowBrowser`, plus `anthropic-dangerous-direct-browser-access` for
 Claude) — that flag is correct here precisely because there is no server in
-between to leak the key to.
+between to leak the key to. Android talks to the same two REST endpoints directly
+over `HttpURLConnection`; neither vendor ships an Android SDK worth its size for
+two calls.
 
 Note content you run an action on is sent to the provider and billed to your
 account.
