@@ -115,7 +115,12 @@ if ($NoPublish) {
 # --- publish ------------------------------------------------------------------
 
 Step "Committing and tagging $tag"
-git -C $root add -A
+# Not Invoke-Native and not bare: `git add` writes its CRLF advice to stderr, and
+# with $ErrorActionPreference = 'Stop' PowerShell turns any native stderr into a
+# terminating NativeCommandError. That aborted a release mid-way once, after the
+# artifacts were already built. The exit code is what actually matters here.
+git -C $root add -A 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "git add failed with exit code $LASTEXITCODE" }
 # Re-running at the same version leaves nothing to commit, which is not a failure.
 if (git -C $root diff --cached --name-only) {
   Invoke-Native { git -C $root commit -m "Release $tag" } "git commit"
