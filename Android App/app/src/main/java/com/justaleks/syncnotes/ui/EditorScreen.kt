@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -34,11 +37,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mikepenz.markdown.m3.Markdown
@@ -50,6 +53,7 @@ import com.justaleks.syncnotes.ai.NoteImage
 import com.justaleks.syncnotes.data.Note
 import com.justaleks.syncnotes.data.Revision
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 
 private const val AUTOSAVE_DELAY_MS = 600L
 
@@ -78,12 +82,21 @@ fun EditorScreen(
     onBack: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    var title by remember(note.id) { mutableStateOf(note.title) }
-    var body by remember(note.id) { mutableStateOf(note.body) }
-    var dirty by remember(note.id) { mutableStateOf(false) }
+    // The fields own their text outright.
+    //
+    // Driving a text field from hoisted String state means every save round-trips
+    // through recomposition and back into the field, and each of those trips
+    // re-syncs the keyboard: the composing word was thrown away (typed letters
+    // vanished), the caret was reset (a title typed "hel" came out "elh"), and the
+    // keyboard dropped back to its letter layer mid-symbol. TextFieldState keeps
+    // the buffer on the field's side of that line, so a save is invisible to the IME.
+    val titleState = remember(note.id) { TextFieldState(note.title) }
+    val bodyState = remember(note.id) { TextFieldState(note.body) }
+
+    val title = titleState.text.toString()
+    val body = bodyState.text.toString()
+
     var preview by remember(note.id) { mutableStateOf(false) }
-    // Tracked so an uploaded image can be spliced in where the user was typing.
-    var selection by remember(note.id) { mutableStateOf(TextRange(0)) }
     // Captured when the sheet opens: the field loses its selection to the sheet, so
     // the range has to be remembered rather than read back later.
     var assistScope by remember(note.id) { mutableStateOf<TextRange?>(null) }
@@ -94,30 +107,32 @@ fun EditorScreen(
     // echoing back, not an edit from another device.
     var saved by remember(note.id) { mutableStateOf(note.title to note.body) }
 
-    // Adopt edits that arrived from another device, but never clobber what the
-    // user is actively typing here.
-    LaunchedEffect(note.title, note.body, dirty) {
-        if (dirty) return@LaunchedEffect
-        // Reassigning the field to text it already holds still rebuilds its
-        // TextFieldValue, which throws the caret back to the start. Our own echo
-        // has to be ignored, not merely allowed through harmlessly.
+    // Derived rather than tracked: "there is something unsaved" is a fact about the
+    // text, and a separate flag could disagree with it.
+    val dirty = title != saved.first || body != saved.second
+
+    // Adopt edits that arrived from another device, but never clobber what the user
+    // is actively typing here.
+    LaunchedEffect(note.title, note.body) {
         if (note.title == saved.first && note.body == saved.second) return@LaunchedEffect
+        if (title != saved.first || body != saved.second) return@LaunchedEffect
 
         saved = note.title to note.body
-        title = note.title
-        body = note.body
+        titleState.setTextAndPlaceCursorAtEnd(note.title)
+        bodyState.setTextAndPlaceCursorAtEnd(note.body)
     }
 
-    // Debounced autosave — no save button, the way a notes app should work. Keyed on
-    // the text, so a keystroke restarts the delay and nothing is ever marked saved
-    // while newer characters are still sitting in the field.
-    LaunchedEffect(dirty, title, body) {
-        if (dirty) {
-            delay(AUTOSAVE_DELAY_MS)
-            saved = title to body
-            onSave(title, body)
-            dirty = false
-        }
+    // Debounced autosave — no save button, the way a notes app should work.
+    // collectLatest cancels the pending delay on the next keystroke, so the write
+    // only happens once typing actually pauses.
+    LaunchedEffect(note.id) {
+        snapshotFlow { titleState.text.toString() to bodyState.text.toString() }
+            .collectLatest { (t, b) ->
+                if (t == saved.first && b == saved.second) return@collectLatest
+                delay(AUTOSAVE_DELAY_MS)
+                saved = t to b
+                onSave(t, b)
+            }
     }
 
     // Flush anything still unsaved when the screen goes away (back press, process death).
@@ -153,10 +168,14 @@ fun EditorScreen(
                     IconButton(
                         onClick = {
                             onPickImage { markdown ->
-                                val at = selection.end.coerceIn(0, body.length)
-                                body = body.substring(0, at) + "\n\n" + markdown + "\n\n" +
-                                    body.substring(at)
-                                dirty = true
+                                val inserted = "\n\n" + markdown + "\n\n"
+                                bodyState.edit {
+                                    // Where the user was last typing, so the image
+                                    // lands there rather than at the end.
+                                    val at = selection.end.coerceIn(0, length)
+                                    replace(at, at, inserted)
+                                    selection = TextRange(at + inserted.length)
+                                }
                             }
                         },
                         enabled = !uploading,
@@ -174,7 +193,7 @@ fun EditorScreen(
                     if (aiSettings.isConfigured) {
                         IconButton(
                             onClick = {
-                                assistScope = selection.takeIf { !it.collapsed }
+                                assistScope = bodyState.selection.takeIf { !it.collapsed }
                                 showAssist = true
                             },
                         ) {
@@ -218,8 +237,7 @@ fun EditorScreen(
             }
 
             EditorField(
-                value = title,
-                onValueChange = { title = it; dirty = true },
+                state = titleState,
                 placeholder = "Title",
                 readOnly = preview,
                 textStyle = LocalTextStyle.current.copy(
@@ -255,15 +273,8 @@ fun EditorScreen(
                     }
                 }
             } else {
-                EditorFieldWithSelection(
-                    value = body,
-                    selection = selection,
-                    onValueChange = { text, range ->
-                        body = text
-                        selection = range
-                        dirty = true
-                    },
-                    onSelectionChange = { selection = it },
+                EditorField(
+                    state = bodyState,
                     placeholder = "Start writing… markdown works: **bold**, # heading, - list",
                     textStyle = LocalTextStyle.current.copy(
                         color = MaterialTheme.colorScheme.onBackground,
@@ -290,18 +301,20 @@ fun EditorScreen(
                 onRun = onRunAssist,
                 onStop = onStopAssist,
                 onReplace = { text ->
-                    body = if (scope != null) {
-                        body.substring(0, scope.min) + text + body.substring(scope.max)
+                    if (scope != null) {
+                        bodyState.edit {
+                            replace(scope.min, scope.max, text)
+                            selection = TextRange(scope.min + text.length)
+                        }
                     } else {
-                        text
+                        bodyState.setTextAndPlaceCursorAtEnd(text)
                     }
-                    dirty = true
                 },
                 onAppend = { text ->
                     val at = scope?.max ?: body.length
-                    body = (body.substring(0, at) + "\n\n" + text + "\n\n" + body.substring(at))
+                    val merged = (body.substring(0, at) + "\n\n" + text + "\n\n" + body.substring(at))
                         .replace(Regex("\n{3,}"), "\n\n")
-                    dirty = true
+                    bodyState.setTextAndPlaceCursorAtEnd(merged)
                 },
                 onDismiss = { close() },
             )
@@ -314,9 +327,8 @@ fun EditorScreen(
                 currentBody = body,
                 onRestore = { revision ->
                     onRestore(title, body, revision) { restoredTitle, restoredBody ->
-                        title = restoredTitle
-                        body = restoredBody
-                        dirty = true
+                        titleState.setTextAndPlaceCursorAtEnd(restoredTitle)
+                        bodyState.setTextAndPlaceCursorAtEnd(restoredBody)
                     }
                     showHistory = false
                 },
@@ -331,68 +343,32 @@ fun EditorScreen(
 
 /**
  * Undecorated text field — the editor should feel like a blank page, not a form.
+ *
+ * Built on TextFieldState rather than a hoisted String or TextFieldValue. The
+ * value-based overloads push every edit out to app state and accept it back on
+ * the next recomposition, and each of those round trips re-syncs the keyboard:
+ * the composing word is discarded, the caret is reset, and the layout snaps back
+ * to letters. Since autosave recomposes this screen constantly, all three were
+ * happening while typing. Here the field keeps its own buffer and a save never
+ * touches it.
  */
 @Composable
 private fun EditorField(
-    value: String,
-    onValueChange: (String) -> Unit,
+    state: TextFieldState,
     placeholder: String,
     textStyle: androidx.compose.ui.text.TextStyle,
     modifier: Modifier = Modifier,
     readOnly: Boolean = false,
 ) {
     BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
+        state = state,
         readOnly = readOnly,
         textStyle = textStyle,
         cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
         modifier = modifier,
-        decorationBox = { inner ->
-            if (value.isEmpty()) {
-                Text(
-                    placeholder,
-                    style = textStyle.merge(
-                        SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    ),
-                )
-            }
-            inner()
-        },
-    )
-}
-
-/**
- * Same field, but reporting the caret position — an inserted image has to land where
- * the user was typing rather than at the end of the note.
- */
-@Composable
-private fun EditorFieldWithSelection(
-    value: String,
-    selection: TextRange,
-    onValueChange: (String, TextRange) -> Unit,
-    onSelectionChange: (TextRange) -> Unit,
-    placeholder: String,
-    textStyle: androidx.compose.ui.text.TextStyle,
-    modifier: Modifier = Modifier,
-) {
-    // The field owns its own TextFieldValue so typing stays responsive, but it is
-    // rebuilt whenever the text changes underneath it (an image was just inserted).
-    val fieldValue = remember(value, selection) {
-        TextFieldValue(text = value, selection = selection)
-    }
-
-    BasicTextField(
-        value = fieldValue,
-        onValueChange = { next ->
-            if (next.text == value) onSelectionChange(next.selection)
-            else onValueChange(next.text, next.selection)
-        },
-        textStyle = textStyle,
-        cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
-        modifier = modifier,
-        decorationBox = { inner ->
-            if (value.isEmpty()) {
+        lineLimits = TextFieldLineLimits.MultiLine(),
+        decorator = { inner ->
+            if (state.text.isEmpty()) {
                 Text(
                     placeholder,
                     style = textStyle.merge(
