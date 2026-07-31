@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import type { ProviderId } from './settings'
 import { isUsableChatModel } from './models'
+import type { NoteImage } from './vision'
 
 export type ProviderInfo = {
   id: ProviderId
@@ -60,6 +61,49 @@ export async function listModels(provider: ProviderId, apiKey: string): Promise<
 
 export type StreamHandle = { cancel: () => void }
 
+/** Introduces the attachments so the model knows they belong to the note. */
+const imageIntro = (images: NoteImage[]) =>
+  images.length === 1
+    ? 'The note contains this image. Take what it shows into account.'
+    : `The note contains these ${images.length} images, in the order they appear. Take what they show into account.`
+
+/** Labels each image with its alt text, so the answer can refer to it by name. */
+const imageLabel = (image: NoteImage, index: number) =>
+  image.alt ? `Image ${index + 1} — "${image.alt}":` : `Image ${index + 1}:`
+
+/**
+ * Both APIs will fetch an image URL from their own servers, which is why the
+ * note's Firebase Storage links are passed through as-is rather than downloaded
+ * and re-encoded here. Downloading them in the browser would need a CORS policy
+ * on the bucket that the app does not otherwise require, and would put a
+ * megabyte of base64 through memory for no gain.
+ */
+function anthropicContent(prompt: string, images: NoteImage[]): Anthropic.ContentBlockParam[] {
+  if (images.length === 0) return [{ type: 'text', text: prompt }]
+
+  return [
+    { type: 'text', text: imageIntro(images) },
+    ...images.flatMap((image, i): Anthropic.ContentBlockParam[] => [
+      { type: 'text', text: imageLabel(image, i) },
+      { type: 'image', source: { type: 'url', url: image.url } },
+    ]),
+    { type: 'text', text: prompt },
+  ]
+}
+
+function openaiContent(prompt: string, images: NoteImage[]) {
+  if (images.length === 0) return prompt
+
+  return [
+    { type: 'text' as const, text: imageIntro(images) },
+    ...images.flatMap((image, i) => [
+      { type: 'text' as const, text: imageLabel(image, i) },
+      { type: 'image_url' as const, image_url: { url: image.url } },
+    ]),
+    { type: 'text' as const, text: prompt },
+  ]
+}
+
 /**
  * Streams a completion, calling [onText] with each chunk.
  *
@@ -73,6 +117,7 @@ export function streamCompletion(
   model: string,
   system: string,
   prompt: string,
+  images: NoteImage[],
   onText: (chunk: string) => void,
 ): { done: Promise<void>; handle: StreamHandle } {
   const controller = new AbortController()
@@ -85,7 +130,7 @@ export function streamCompletion(
           model,
           max_tokens: 16000,
           system,
-          messages: [{ role: 'user', content: prompt }],
+          messages: [{ role: 'user', content: anthropicContent(prompt, images) }],
         },
         { signal: controller.signal },
       )
@@ -100,7 +145,7 @@ export function streamCompletion(
         stream: true,
         messages: [
           { role: 'system', content: system },
-          { role: 'user', content: prompt },
+          { role: 'user', content: openaiContent(prompt, images) },
         ],
       },
       { signal: controller.signal },
@@ -126,6 +171,13 @@ export function aiErrorMessage(err: unknown): string {
         return 'That model does not exist for this key. Pick another in Settings.'
       case 429:
         return 'Rate limited or out of credit. Wait a moment, or check your billing.'
+      case 400:
+        // The usual cause is an image the provider could not fetch or decode,
+        // and the fix is one tick-box away.
+        if (/image|media|url|unsupported/i.test(err.message)) {
+          return "The model couldn't read one of the note's images. Untick “Show the images” and try again."
+        }
+        return err.message
       default:
         if (err.status && err.status >= 500) return 'The provider is having trouble. Try again.'
         return err.message

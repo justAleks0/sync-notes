@@ -92,6 +92,20 @@ export function isUsableChatModel(provider: ProviderId, id: string): boolean {
   return /^(gpt|o\d)/i.test(id)
 }
 
+/**
+ * Whether the model can be shown the images in a note.
+ *
+ * Worth checking rather than always attaching: a text-only model rejects the
+ * whole request when an image block arrives, so the note's words would fail to
+ * go through as well. Every Claude model in the picker reads images; on OpenAI
+ * the modern families do, and the older ids that do not are already filtered out
+ * of the list — this is the belt to that braces.
+ */
+export function supportsVision(provider: ProviderId, id: string): boolean {
+  if (provider === 'anthropic') return id.startsWith('claude-')
+  return /^(gpt-4o|gpt-4\.1|gpt-5|o[34])/i.test(id)
+}
+
 /** The balanced pick — deliberately not the flagship. */
 export function defaultModel(provider: ProviderId, available: string[]): string {
   const recommended = RECOMMENDED[provider]

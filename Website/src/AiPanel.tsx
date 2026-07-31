@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ACTIONS, SYSTEM_PROMPT, buildCustomPrompt, type AiAction } from './ai/actions'
 import { aiErrorMessage, streamCompletion, type StreamHandle } from './ai/providers'
+import { supportsVision } from './ai/models'
+import { extractImages, MAX_IMAGES } from './ai/vision'
 import { isConfigured, loadAiSettings, AI_SETTINGS_CHANGED, type AiSettings } from './ai/settings'
 
 /** Reads AI settings and stays in step when they change in the Settings modal. */
@@ -46,7 +48,14 @@ export function AiPanel({
   const [output, setOutput] = useState('')
   const [running, setRunning] = useState(false)
   const [error, setError] = useState('')
+  const [withImages, setWithImages] = useState(true)
   const stream = useRef<StreamHandle | null>(null)
+
+  const images = useMemo(() => extractImages(source), [source])
+  const canSee = supportsVision(settings.provider, settings.model)
+  // Slicing here rather than in the extractor so the panel can say how many were
+  // left behind.
+  const attached = canSee && withImages ? images.slice(0, MAX_IMAGES) : []
 
   // Abandon an in-flight request if the panel closes — otherwise it keeps
   // streaming (and billing) into a component that no longer exists.
@@ -65,6 +74,7 @@ export function AiPanel({
       settings.model,
       SYSTEM_PROMPT,
       prompt,
+      attached,
       (chunk) => setOutput((current) => current + chunk),
     )
     stream.current = handle
@@ -95,6 +105,33 @@ export function AiPanel({
         </span>
         <button className="link" onClick={onClose}>Close</button>
       </header>
+
+      {images.length > 0 && (
+        <div className="ai-images">
+          {canSee ? (
+            <label>
+              <input
+                type="checkbox"
+                checked={withImages}
+                disabled={running}
+                onChange={(e) => setWithImages(e.target.checked)}
+              />
+              <span>
+                Show {images.length === 1 ? 'the image' : `the ${images.length} images`} to the
+                model
+                {images.length > MAX_IMAGES && (
+                  <span className="muted"> — the first {MAX_IMAGES} of them</span>
+                )}
+              </span>
+            </label>
+          ) : (
+            <span className="muted">
+              {settings.model} can't read images. Pick a model that can in Settings to have the{' '}
+              {images.length === 1 ? 'image' : `${images.length} images`} taken into account.
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="ai-actions">
         {ACTIONS.map((item) => (

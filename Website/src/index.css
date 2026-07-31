@@ -631,6 +631,16 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
   white-space: nowrap;
 }
 
+.ai-images { font-size: 12.5px; margin-top: -2px; }
+.ai-images label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+.ai-images input { accent-color: var(--accent); }
+.ai-images .muted { font-size: 12.5px; }
+
 .ai-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .ai-actions button {
   padding: 6px 11px;
