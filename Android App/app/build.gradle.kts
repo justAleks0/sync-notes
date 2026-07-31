@@ -8,7 +8,7 @@ plugins {
 
 // Single source of truth for the app version — the release script rewrites this line,
 // and UpdateChecker compares it against the newest GitHub release tag.
-val appVersionName = "0.8.0"
+val appVersionName = "0.9.0"
 
 // Android needs a monotonically increasing integer, so derive one from the version.
 // 0.1.0 -> 100, 1.2.3 -> 10203.
