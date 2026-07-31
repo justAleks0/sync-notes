@@ -225,8 +225,29 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
   padding: 12px 20px;
   border-bottom: 1px solid var(--line);
 }
+.editor-head { gap: 8px; }
 .editor-head .status { flex: 1; font-size: 13px; }
 .editor-head .back { display: none; }
+
+/* Real buttons, not text links — compact enough to sit in the header without
+   crowding it, but with the affordances of something clickable. */
+.editor-action {
+  flex: none;
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.editor-action.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.editor-action.danger { color: var(--danger); }
+.editor-action.danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: rgba(255, 107, 107, 0.12);
+}
 
 .title-input {
   border: none;
@@ -730,5 +751,5 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
   .editor-pane { display: none; }
   .app.editing .sidebar { display: none; }
   .app.editing .editor-pane { display: flex; }
-  .editor-head .back { display: inline; }
+  .editor-head .back { display: inline-block; }
 }

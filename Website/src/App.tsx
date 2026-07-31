@@ -254,12 +254,12 @@ function Editor({
       }}
     >
       <header className="editor-head">
-        <button className="link back" onClick={onBack}>← Notes</button>
+        <button className="editor-action back" onClick={onBack}>← Notes</button>
         <span className="muted status">
           {uploading ? 'Uploading image…' : dirty || note.pending ? 'Saving…' : 'Saved'}
         </span>
         <button
-          className="link"
+          className="editor-action"
           onClick={() => fileRef.current?.click()}
           disabled={uploading}
           title="Insert an image — you can also paste or drag one in"
@@ -268,7 +268,7 @@ function Editor({
         </button>
         {isConfigured(ai) && (
           <button
-            className="link"
+            className={`editor-action ${showAi ? 'active' : ''}`}
             onClick={() => {
               // Capture the selection now — opening the panel moves focus and
               // the textarea forgets what was highlighted.
@@ -287,10 +287,13 @@ function Editor({
             Assist
           </button>
         )}
-        <button className="link" onClick={() => setPreview(!preview)}>
+        <button
+          className={`editor-action ${preview ? 'active' : ''}`}
+          onClick={() => setPreview(!preview)}
+        >
           {preview ? 'Edit' : 'Preview'}
         </button>
-        <button className="link danger" onClick={onDelete}>Delete</button>
+        <button className="editor-action danger" onClick={onDelete}>Delete</button>
       </header>
 
       <input
