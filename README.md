@@ -191,6 +191,31 @@ Off by default. Settings → **AI assistance** → enable, pick a provider (Clau
 OpenAI), paste your own API key, hit **Connect**. The model list is fetched with
 your key rather than hard-coded, so it can't go stale.
 
+### Which model
+
+The list is filtered to models that can actually answer a chat request — an
+OpenAI account returns 110+ entries, most of them audio, image, embedding, or
+deprecated models that would just error. What's left is grouped, with a short
+list suggested for this app and everything else still selectable.
+
+This workload is short input, short output, and someone waiting — so latency
+matters and deep reasoning doesn't. Frontier and `-pro`/reasoning models are
+deliberately not suggested: they're slower, and on "tighten this paragraph" they
+spend output tokens on reasoning nobody reads.
+
+| | Claude | OpenAI |
+|---|---|---|
+| Fastest / cheapest | `claude-haiku-4-5` — $1/$5 | `gpt-5.4-nano` — $0.20/$1.25 |
+| **Balanced (default)** | `claude-sonnet-5` — $3/$15 | `gpt-5.4-mini` — $0.75/$4.50 |
+| Highest quality | `claude-opus-5` — $5/$25 | `gpt-5.4` — $2.50/$15 |
+
+USD per 1M input/output tokens, July 2026.
+
+**Cost is close to irrelevant here, and the UI says so.** At ~50 actions a month
+(~1500 tokens in, ~500 out) the *entire* range runs from under 10¢ to about a
+dollar a month. A 20× price ratio is a rounding error in absolute terms, so pick
+on quality and speed, not price. Settings shows the per-model estimate.
+
 In the editor, **Assist** offers: improve writing, summarise, continue, add
 structure, suggest edits, or a free-form instruction. It acts on the selected
 text if there is one, otherwise the whole note. Results stream in and are **never

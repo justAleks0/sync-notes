@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { PROVIDERS, aiErrorMessage, listModels, suggestModel } from './ai/providers'
+import { PROVIDERS, aiErrorMessage, listModels } from './ai/providers'
+import { RECOMMENDED, defaultModel, findRecommendation, monthlyEstimate } from './ai/models'
 import {
   DEFAULT_SETTINGS,
   clearAiSettings,
@@ -16,6 +17,8 @@ export function AiSettingsCard() {
   const [notice, setNotice] = useState('')
 
   const provider = PROVIDERS.find((p) => p.id === settings.provider)!
+  const recommended = RECOMMENDED[settings.provider]
+  const chosen = findRecommendation(settings.provider, settings.model)
 
   // Persist on every change so the editor picks it up immediately.
   useEffect(() => { saveAiSettings(settings) }, [settings])
@@ -30,9 +33,9 @@ export function AiSettingsCard() {
       // Only auto-pick when the saved model isn't valid for this key.
       const model = available.includes(settings.model)
         ? settings.model
-        : suggestModel(settings.provider, available)
+        : defaultModel(settings.provider, available)
       setSettings((s) => ({ ...s, model }))
-      setNotice(`Connected — ${available.length} models available.`)
+      setNotice(`Connected — ${available.length} usable chat models.`)
     } catch (err) {
       setModels([])
       setError(aiErrorMessage(err))
@@ -100,14 +103,38 @@ export function AiSettingsCard() {
           </div>
 
           {models.length > 0 && (
-            <div className="row">
-              <select
-                value={settings.model}
-                onChange={(e) => setSettings((s) => ({ ...s, model: e.target.value }))}
-              >
-                {models.map((id) => <option key={id} value={id}>{id}</option>)}
-              </select>
-            </div>
+            <>
+              <div className="row">
+                <select
+                  value={settings.model}
+                  onChange={(e) => setSettings((s) => ({ ...s, model: e.target.value }))}
+                >
+                  {/* Suited-to-this-app first; everything else still reachable. */}
+                  <optgroup label="Suggested for notes">
+                    {recommended
+                      .filter((r) => models.includes(r.id))
+                      .map((r) => (
+                        <option key={r.id} value={r.id}>{r.label}</option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="All chat models">
+                    {models
+                      .filter((id) => !recommended.some((r) => r.id === id))
+                      .map((id) => <option key={id} value={id}>{id}</option>)}
+                  </optgroup>
+                </select>
+              </div>
+
+              {chosen && (
+                <p className="muted hint">
+                  {chosen.note}{' '}
+                  <strong>
+                    ${chosen.inputPerM}/${chosen.outputPerM} per 1M tokens — {monthlyEstimate(chosen)}
+                  </strong>{' '}
+                  at typical use.
+                </p>
+              )}
+            </>
           )}
 
           {settings.model && models.length === 0 && (

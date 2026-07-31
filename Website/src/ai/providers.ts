@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import type { ProviderId } from './settings'
+import { isUsableChatModel } from './models'
 
 export type ProviderInfo = {
   id: ProviderId
@@ -44,38 +45,17 @@ const openaiClient = (apiKey: string) =>
 /**
  * Model IDs move faster than any list we could hard-code, so ask the provider
  * with the user's own key instead of shipping a guess that 404s next quarter.
+ * The result is filtered to models that can actually answer a chat request —
+ * unfiltered, an OpenAI account returns well over a hundred entries, most of
+ * them audio, image, or embedding models that would simply error here.
  */
 export async function listModels(provider: ProviderId, apiKey: string): Promise<string[]> {
-  if (provider === 'anthropic') {
-    const models = await anthropicClient(apiKey).models.list({ limit: 100 })
-    return models.data.map((m) => m.id)
-  }
-
-  const models = await openaiClient(apiKey).models.list()
-  return models.data
-    .map((m) => m.id)
-    // The account's model list includes embeddings, audio, and image models that
-    // cannot answer a chat request at all.
-    .filter((id) => /^(gpt|o\d|chatgpt)/i.test(id))
-    .sort()
-}
-
-/** Prefer the most capable model the key can actually reach. */
-export function suggestModel(provider: ProviderId, available: string[]): string {
-  const preferences =
+  const ids =
     provider === 'anthropic'
-      ? ['claude-opus-5', 'claude-sonnet-5', 'claude-opus-4-8']
-      : ['gpt-5', 'gpt-4.1', 'gpt-4o']
+      ? (await anthropicClient(apiKey).models.list({ limit: 100 })).data.map((m) => m.id)
+      : (await openaiClient(apiKey).models.list()).data.map((m) => m.id)
 
-  for (const preferred of preferences) {
-    const exact = available.find((id) => id === preferred)
-    if (exact) return exact
-  }
-  for (const preferred of preferences) {
-    const partial = available.find((id) => id.startsWith(preferred))
-    if (partial) return partial
-  }
-  return available[0] ?? ''
+  return ids.filter((id) => isUsableChatModel(provider, id)).sort()
 }
 
 export type StreamHandle = { cancel: () => void }
