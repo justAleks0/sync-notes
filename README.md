@@ -185,6 +185,33 @@ npx firebase-tools deploy --only storage --project sync-notes-c252b
 Until then image uploads fail with a "Storage isn't set up" message; markdown works
 regardless.
 
+## AI assistance (opt-in)
+
+Off by default. Settings → **AI assistance** → enable, pick a provider (Claude or
+OpenAI), paste your own API key, hit **Connect**. The model list is fetched with
+your key rather than hard-coded, so it can't go stale.
+
+In the editor, **Assist** offers: improve writing, summarise, continue, add
+structure, suggest edits, or a free-form instruction. It acts on the selected
+text if there is one, otherwise the whole note. Results stream in and are **never
+applied automatically** — you choose Replace, Insert below, or Copy.
+
+**Where the key lives, and why.** It is stored in `localStorage` on the device
+you entered it on, deliberately **not** in Firestore. An API key is a billable
+credential: syncing it would write it to a server, replicate it to every device,
+and leave it in each one's offline cache, so anyone reaching the account would
+get a working key rather than just some notes. The cost of that choice is real —
+you enter the key once per device.
+
+Requests go straight from the browser to the provider; nothing passes through
+Sync Notes or Firebase. Both SDKs need an explicit browser opt-in
+(`dangerouslyAllowBrowser`, plus `anthropic-dangerous-direct-browser-access` for
+Claude) — that flag is correct here precisely because there is no server in
+between to leak the key to.
+
+Note content you run an action on is sent to the provider and billed to your
+account.
+
 ## Updates
 
 On launch, each installed client asks

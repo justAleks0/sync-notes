@@ -6,6 +6,8 @@ import { Profile } from './Profile'
 import { UpdateBanner } from './UpdateBanner'
 import { Markdown } from './Markdown'
 import { imageMarkdown, imageProblem, uploadErrorMessage, uploadImage } from './images'
+import { AiPanel, useAiSettings } from './AiPanel'
+import { isConfigured } from './ai/settings'
 import { createNote, deleteNote, saveNote, watchNotes, type Note } from './notes'
 
 const AUTOSAVE_DELAY_MS = 600
@@ -140,9 +142,12 @@ function Editor({
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [showAi, setShowAi] = useState(false)
+  const [aiScope, setAiScope] = useState<{ start: number; end: number } | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const ai = useAiSettings()
 
   // Adopt changes that arrived from another device, but never clobber what the
   // user is actively typing here.
@@ -261,6 +266,27 @@ function Editor({
         >
           Image
         </button>
+        {isConfigured(ai) && (
+          <button
+            className="link"
+            onClick={() => {
+              // Capture the selection now — opening the panel moves focus and
+              // the textarea forgets what was highlighted.
+              const field = bodyRef.current
+              const hasSelection =
+                field !== null && field.selectionStart !== field.selectionEnd
+              setAiScope(
+                hasSelection
+                  ? { start: field.selectionStart, end: field.selectionEnd }
+                  : null,
+              )
+              setPreview(false)
+              setShowAi(true)
+            }}
+          >
+            Assist
+          </button>
+        )}
         <button className="link" onClick={() => setPreview(!preview)}>
           {preview ? 'Edit' : 'Preview'}
         </button>
@@ -336,6 +362,31 @@ function Editor({
       )}
 
       {dragging && <div className="drop-hint">Drop images to add them</div>}
+
+      {showAi && (
+        <AiPanel
+          settings={ai}
+          title={title}
+          scope={aiScope ? 'selection' : 'note'}
+          source={aiScope ? body.slice(aiScope.start, aiScope.end) : body}
+          onClose={() => setShowAi(false)}
+          onReplace={(text) =>
+            edit(() =>
+              setBody(
+                aiScope
+                  ? body.slice(0, aiScope.start) + text + body.slice(aiScope.end)
+                  : text,
+              ),
+            )
+          }
+          onAppend={(text) =>
+            edit(() => {
+              const at = aiScope ? aiScope.end : body.length
+              setBody(`${body.slice(0, at)}\n\n${text}\n\n${body.slice(at)}`.replace(/\n{3,}/g, '\n\n'))
+            })
+          }
+        />
+      )}
     </div>
   )
 }

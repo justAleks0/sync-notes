@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import type { User } from 'firebase/auth'
+import { AiSettingsCard } from './AiSettings'
 import {
   GOOGLE_PROVIDER,
   PASSWORD_PROVIDER,
@@ -247,6 +248,8 @@ export function Profile({ user, onRefresh, onClose }: Props) {
               </p>
             )}
           </section>
+
+          <AiSettingsCard />
 
           <button className="link danger signout" onClick={signOutUser}>Sign out</button>
         </div>
