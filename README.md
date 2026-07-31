@@ -60,14 +60,29 @@ cd "Android App" && ./gradlew :app:assembleDebug
 
 ## Deploying the website
 
-Vercel, with **Root Directory** set to `Website`. Framework preset is Vite; build
-command and output directory are detected automatically. No environment variables
-are needed — the Firebase web config is public by design (it identifies the project;
-it does not grant access, the security rules do).
+Live at **https://syncnotes-app.vercel.app** (Vercel project
+`justaleks-projects/syncnotes-app`, root directory `Website`, Vite preset). No
+environment variables are needed — the Firebase web config is public by design (it
+identifies the project; it does not grant access, the security rules do).
 
-After the first deploy, add the Vercel domain under
-**Firebase Console → Authentication → Settings → Authorized domains**, otherwise
-Google sign-in will be rejected on the live site.
+Deploys are manual for now:
+
+```bash
+cd Website && npx vercel deploy --prod
+```
+
+Connect the GitHub repo in the Vercel dashboard to get deploys on push.
+
+Two things that bite on a fresh deploy:
+
+- **Authorized domains.** Google sign-in only runs from a domain listed under
+  **Firebase Console → Authentication → Settings → Authorized domains**. Add every
+  hostname you actually use. There is no CLI for this. Email/password is unaffected,
+  since it is a plain HTTPS call with no origin check.
+- **Deployment protection.** This project has SSO protection set to
+  `all_except_custom_domains`. A domain attached to the *project* is production and
+  public; one assigned to a *deployment* with `vercel alias set` is not, and serves
+  a Vercel login page instead. Use `vercel domains add <domain> <project>`.
 
 ## Security rules
 
