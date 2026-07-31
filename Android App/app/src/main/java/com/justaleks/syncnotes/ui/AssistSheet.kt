@@ -49,16 +49,86 @@ import com.justaleks.syncnotes.AssistState
 import com.justaleks.syncnotes.ai.ACTIONS
 import com.justaleks.syncnotes.ai.AiResult
 import com.justaleks.syncnotes.ai.AiSettings
+import com.justaleks.syncnotes.ai.DiffKind
+import com.justaleks.syncnotes.ai.DiffRow
 import com.justaleks.syncnotes.ai.EditStatus
 import com.justaleks.syncnotes.ai.SuggestedEdit
 import com.justaleks.syncnotes.ai.applyEdits
+import com.justaleks.syncnotes.ai.diffLines
 import com.justaleks.syncnotes.ai.statusOf
+import com.justaleks.syncnotes.ai.summarise
+import com.justaleks.syncnotes.ai.withContext
 import com.justaleks.syncnotes.ai.MAX_IMAGES
 import com.justaleks.syncnotes.ai.NoteImage
 import com.justaleks.syncnotes.ai.buildCustomPrompt
 import com.justaleks.syncnotes.ai.extractImages
 import com.justaleks.syncnotes.ai.supportsVision
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/**
+ * The before-and-after, line by line.
+ *
+ * Without this the only way to know what an action did was to already know the
+ * note by heart — and a model that quietly rewrites a section you liked looks
+ * exactly like one that did the job.
+ */
+@Composable
+private fun DiffView(rows: List<DiffRow>) {
+    val added = MaterialTheme.colorScheme.primary
+    val removed = MaterialTheme.colorScheme.error
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+
+    LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+        items(rows.size) { index ->
+            val row = rows[index]
+            val line = row.line
+
+            if (line == null) {
+                Text(
+                    "${row.hidden} unchanged ${if (row.hidden == 1) "line" else "lines"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = muted,
+                    modifier = Modifier.padding(vertical = 3.dp, horizontal = 12.dp),
+                )
+                return@items
+            }
+
+            val tint = when (line.kind) {
+                DiffKind.ADD -> added
+                DiffKind.REMOVE -> removed
+                DiffKind.SAME -> muted
+            }
+            val mark = when (line.kind) {
+                DiffKind.ADD -> "+ "
+                DiffKind.REMOVE -> "− "
+                DiffKind.SAME -> "  "
+            }
+
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = tint)) { append(mark) }
+                    val words = line.words
+                    if (words == null) {
+                        withStyle(SpanStyle(color = if (line.kind == DiffKind.SAME) muted else tint)) {
+                            append(line.text.ifEmpty { " " })
+                        }
+                    } else {
+                        // Only the words that actually moved are tinted, so a
+                        // one-word fix reads as a one-word fix.
+                        for (part in words) {
+                            withStyle(SpanStyle(color = if (part.changed) tint else muted)) {
+                                append(part.text)
+                            }
+                        }
+                    }
+                },
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+        }
+    }
+}
 
 /**
  * The suggestions themselves, each with the exact before and after so the change
@@ -184,6 +254,25 @@ fun AssistSheet(
 
     val canApply = state.output.isNotBlank() && !state.running
 
+    var elapsed by remember(state.running) { mutableStateOf(0f) }
+    LaunchedEffect(state.running) {
+        if (!state.running) return@LaunchedEffect
+        val started = System.currentTimeMillis()
+        while (true) {
+            elapsed = (System.currentTimeMillis() - started) / 1000f
+            delay(100)
+        }
+    }
+
+    // A custom instruction replaces the note too, so it gets a diff like the rest.
+    val settled = !state.running && state.edits == null && state.output.isNotBlank()
+    val replaces = ACTIONS.firstOrNull { it.id == state.actionId }?.result != AiResult.APPEND
+    val diff = remember(settled, replaces, source, state.output) {
+        if (settled && replaces) diffLines(source, state.output.trim()) else null
+    }
+    val change = diff?.let { summarise(it) }
+    val diffRows = diff?.let { withContext(it) }
+
     // Everything that can still be applied starts ticked: the common case is
     // wanting most of them.
     var chosen by remember(state.edits) {
@@ -308,6 +397,27 @@ fun AssistSheet(
                 )
             }
 
+            if (state.running) {
+                // A fast answer and a broken one look identical without something
+                // on screen that is visibly counting.
+                Text(
+                    "Working… %.1fs".format(elapsed) +
+                        if (state.output.isNotEmpty()) " · ${state.output.length} characters so far"
+                        else "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else if (change != null) {
+                Text(
+                    if (change.unchanged) "The model returned the note unchanged."
+                    else "${change.removed} ${if (change.removed == 1) "line" else "lines"} " +
+                        "replaced by ${change.added}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (change.unchanged) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             val edits = state.edits
             if (edits != null) {
                 EditList(
@@ -318,6 +428,8 @@ fun AssistSheet(
                         chosen = if (chosen.contains(id)) chosen - id else chosen + id
                     },
                 )
+            } else if (diffRows != null && change?.unchanged == false) {
+                DiffView(diffRows)
             } else if (state.output.isNotEmpty() || state.running) {
                 SelectionContainer {
                     Text(

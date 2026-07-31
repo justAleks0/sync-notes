@@ -668,6 +668,73 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
   white-space: pre-wrap;
   word-break: break-word;
 }
+.ai-result-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.ai-result-head .muted { flex: 1; min-width: 0; }
+.ai-nochange { flex: 1; color: var(--warn, #e0b97e); }
+
+.ai-views { display: flex; gap: 4px; }
+.ai-views button {
+  padding: 3px 9px;
+  font-size: 12px;
+  border-radius: 7px;
+}
+.ai-views button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.ai-progress { font-size: 12px; margin: 0; }
+
+.ai-diff {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.ai-diff-line {
+  display: flex;
+  gap: 8px;
+  padding: 0 8px;
+  /* Markdown indentation carries meaning, so it must survive the diff. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ai-diff-line.add { background: rgba(126, 224, 165, 0.1); }
+.ai-diff-line.remove { background: rgba(255, 107, 107, 0.09); }
+.ai-diff-mark {
+  flex: none;
+  width: 10px;
+  color: var(--muted);
+}
+.ai-diff-line.add .ai-diff-mark { color: #7ee0a5; }
+.ai-diff-line.remove .ai-diff-mark { color: var(--danger); }
+.ai-diff-line.remove .ai-diff-text { color: var(--muted); }
+
+.ai-diff mark {
+  padding: 0 1px;
+  border-radius: 3px;
+  background: rgba(126, 224, 165, 0.28);
+  color: inherit;
+}
+.ai-diff-line.remove mark { background: rgba(255, 107, 107, 0.28); }
+
+.ai-diff-gap {
+  padding: 3px 18px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
 .ai-edits {
   flex: 1;
   min-height: 0;

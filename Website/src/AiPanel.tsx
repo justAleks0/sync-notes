@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { diffLines, summarise, withContext, type DiffRow } from './ai/diff'
 import {
   ACTIONS,
   EDIT_SYSTEM_PROMPT,
@@ -28,6 +29,44 @@ export function useAiSettings(): AiSettings {
   }, [])
 
   return settings
+}
+
+/**
+ * The before-and-after, line by line.
+ *
+ * Without this the only way to know what an action did was to already know the
+ * note by heart — and a model that quietly rewrites a section you liked looks
+ * exactly like one that did the job.
+ */
+function DiffView({ rows }: { rows: DiffRow[] }) {
+  return (
+    <div className="ai-diff">
+      {rows.map((row, i) => {
+        if (row.kind === 'gap') {
+          return (
+            <div key={i} className="ai-diff-gap">
+              {row.hidden} unchanged {row.hidden === 1 ? 'line' : 'lines'}
+            </div>
+          )
+        }
+
+        return (
+          <div key={i} className={`ai-diff-line ${row.kind}`}>
+            <span className="ai-diff-mark">
+              {row.kind === 'add' ? '+' : row.kind === 'remove' ? '−' : ' '}
+            </span>
+            <span className="ai-diff-text">
+              {row.words
+                ? row.words.map((part, k) =>
+                    part.changed ? <mark key={k}>{part.text}</mark> : <span key={k}>{part.text}</span>,
+                  )
+                : row.text || ' '}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 /**
@@ -117,7 +156,19 @@ export function AiPanel({
   // off rather than as prose. Null means "not that kind of result".
   const [edits, setEdits] = useState<SuggestedEdit[] | null>(null)
   const [chosen, setChosen] = useState<Set<string>>(new Set())
+  const [view, setView] = useState<'changes' | 'result'>('changes')
+  // Seconds the current run has been going. A fast answer and a broken one look
+  // identical without something on screen that is visibly counting.
+  const [elapsed, setElapsed] = useState(0)
   const stream = useRef<StreamHandle | null>(null)
+
+  useEffect(() => {
+    if (!running) return
+    const started = Date.now()
+    setElapsed(0)
+    const tick = setInterval(() => setElapsed((Date.now() - started) / 1000), 100)
+    return () => clearInterval(tick)
+  }, [running])
 
   const images = useMemo(() => extractImages(source), [source])
   const canSee = supportsVision(settings.provider, settings.model)
@@ -136,6 +187,7 @@ export function AiPanel({
     setError('')
     setEdits(null)
     setChosen(new Set())
+    setView('changes')
     setRunning(true)
 
     let collected = ''
@@ -194,6 +246,17 @@ export function AiPanel({
   }
 
   const canApply = output.trim().length > 0 && !running
+
+  // A custom instruction replaces the note too, so it gets a diff like the rest.
+  const replaces = action === null || action.result === 'replace'
+  const settled = !running && edits === null && output.trim().length > 0
+
+  const diff = useMemo(
+    () => (settled && replaces ? diffLines(source, output.trim()) : null),
+    [settled, replaces, source, output],
+  )
+  const change = diff ? summarise(diff) : null
+  const rows = useMemo(() => (diff ? withContext(diff) : null), [diff])
 
   return (
     <div className="ai-panel">
@@ -279,11 +342,50 @@ export function AiPanel({
           }
         />
       ) : (
-        (output || running) && (
-          <div className="ai-output">
-            <pre>{output}{running && <span className="ai-caret">▍</span>}</pre>
-          </div>
-        )
+        <>
+          {settled && change && (
+            <div className="ai-result-head">
+              <span className={change.unchanged ? 'ai-nochange' : 'muted'}>
+                {change.unchanged
+                  ? 'The model returned the note unchanged.'
+                  : `${change.removed} ${change.removed === 1 ? 'line' : 'lines'} replaced by ${change.added}`}
+              </span>
+              {!change.unchanged && (
+                <span className="ai-views">
+                  <button
+                    className={view === 'changes' ? 'active' : ''}
+                    onClick={() => setView('changes')}
+                  >
+                    Changes
+                  </button>
+                  <button
+                    className={view === 'result' ? 'active' : ''}
+                    onClick={() => setView('result')}
+                  >
+                    Result
+                  </button>
+                </span>
+              )}
+            </div>
+          )}
+
+          {running && (
+            <p className="muted ai-progress">
+              Working… {elapsed.toFixed(1)}s
+              {output.length > 0 && ` · ${output.length} characters so far`}
+            </p>
+          )}
+
+          {rows && view === 'changes' && !change?.unchanged ? (
+            <DiffView rows={rows} />
+          ) : (
+            (output || running) && (
+              <div className="ai-output">
+                <pre>{output}{running && <span className="ai-caret">▍</span>}</pre>
+              </div>
+            )
+          )}
+        </>
       )}
 
       <footer className="ai-foot">
@@ -306,7 +408,7 @@ export function AiPanel({
                 a suggestion until the user picks where it goes. */}
             <button
               className="primary"
-              disabled={!canApply}
+              disabled={!canApply || change?.unchanged === true}
               onClick={() => { onReplace(output.trim()); onClose() }}
             >
               {scope === 'selection' ? 'Replace selection' : 'Replace note'}
