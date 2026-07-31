@@ -1,7 +1,10 @@
 package com.justaleks.syncnotes.ai
 
-/** How a result is offered back — replacing the source, or added after it. */
-enum class AiResult { REPLACE, APPEND }
+/**
+ * How a result is offered back — replacing the source, added after it, or as a
+ * list of individual edits to tick off.
+ */
+enum class AiResult { REPLACE, APPEND, EDITS }
 
 data class AiAction(
     val id: String,
@@ -17,6 +20,17 @@ val SYSTEM_PROMPT = listOf(
     "When images are attached they are the ones embedded in the note, given in order and labelled with their alt text. Read them as part of the note, not as a separate question, and keep referring to them by that alt text. You may edit an image's alt text if it is wrong or missing, but never its URL and never its position in the text.",
     "Return only the requested content. No preamble, no commentary, no code fences around the whole answer.",
     "Match the existing voice and level of detail. If the note is terse notes-to-self, stay terse.",
+).joinToString(" ")
+
+/**
+ * The edit list is machine-read, so the usual "write like the note" instructions
+ * are not just unnecessary here — they actively invite prose around the JSON.
+ */
+val EDIT_SYSTEM_PROMPT = listOf(
+    "You are a copy editor working inside a notes app.",
+    "You reply with JSON only. No preamble, no commentary, no code fences.",
+    "The note is markdown. Never alter image links or URLs, and never restructure the note.",
+    "Quote the note exactly when you cite it — the app matches your text against the real note character for character, and an inexact quote is discarded.",
 ).joinToString(" ")
 
 val ACTIONS: List<AiAction> = listOf(
@@ -64,13 +78,9 @@ val ACTIONS: List<AiAction> = listOf(
     AiAction(
         id = "suggest",
         label = "Suggest edits",
-        hint = "Notes on what to change, nothing rewritten",
-        result = AiResult.APPEND,
-        build = { text, _ ->
-            "Review the following note and suggest specific improvements as a markdown " +
-                "checklist. Point at concrete problems — gaps, unclear passages, " +
-                "contradictions. Do not rewrite the note.\n\n---\n$text"
-        },
+        hint = "Each one offered separately — take the ones you want",
+        result = AiResult.EDITS,
+        build = { text, _ -> buildEditPrompt(text) },
     ),
 )
 

@@ -76,7 +76,12 @@ fun EditorScreen(
         revision: Revision,
         onRestored: (String, String) -> Unit,
     ) -> Unit,
-    onRunAssist: (prompt: String, actionId: String?, images: List<NoteImage>) -> Unit,
+    onRunAssist: (
+        prompt: String,
+        actionId: String?,
+        images: List<NoteImage>,
+        wantsEdits: Boolean,
+    ) -> Unit,
     onStopAssist: () -> Unit,
     onClearAssist: () -> Unit,
     onBack: () -> Unit,

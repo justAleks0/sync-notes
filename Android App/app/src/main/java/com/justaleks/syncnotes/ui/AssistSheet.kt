@@ -1,6 +1,7 @@
 package com.justaleks.syncnotes.ui
 
 import android.content.ClipData
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -11,6 +12,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -37,16 +40,105 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.justaleks.syncnotes.AssistState
 import com.justaleks.syncnotes.ai.ACTIONS
+import com.justaleks.syncnotes.ai.AiResult
 import com.justaleks.syncnotes.ai.AiSettings
+import com.justaleks.syncnotes.ai.EditStatus
+import com.justaleks.syncnotes.ai.SuggestedEdit
+import com.justaleks.syncnotes.ai.applyEdits
+import com.justaleks.syncnotes.ai.statusOf
 import com.justaleks.syncnotes.ai.MAX_IMAGES
 import com.justaleks.syncnotes.ai.NoteImage
 import com.justaleks.syncnotes.ai.buildCustomPrompt
 import com.justaleks.syncnotes.ai.extractImages
 import com.justaleks.syncnotes.ai.supportsVision
 import kotlinx.coroutines.launch
+
+/**
+ * The suggestions themselves, each with the exact before and after so the change
+ * can be judged without hunting for it in the note.
+ */
+@Composable
+private fun EditList(
+    edits: List<SuggestedEdit>,
+    source: String,
+    chosen: Set<String>,
+    onToggle: (String) -> Unit,
+) {
+    if (edits.isEmpty()) {
+        Text(
+            "Nothing to change — it reads fine as it is.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
+
+    LazyColumn(modifier = Modifier.heightIn(max = 340.dp)) {
+        items(edits, key = { it.id }) { edit ->
+            val status = statusOf(source, edit)
+            val missing = status == EditStatus.MISSING
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (missing) Modifier
+                        else Modifier.clickable { onToggle(edit.id) }
+                    )
+                    .padding(vertical = 4.dp),
+            ) {
+                Checkbox(
+                    checked = chosen.contains(edit.id),
+                    onCheckedChange = { onToggle(edit.id) },
+                    enabled = !missing,
+                )
+                Column(
+                    modifier = Modifier.padding(top = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(edit.why, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        buildAnnotatedString {
+                            withStyle(
+                                SpanStyle(
+                                    color = MaterialTheme.colorScheme.error,
+                                    textDecoration = TextDecoration.LineThrough,
+                                )
+                            ) { append(edit.find) }
+                            if (edit.replace.isNotEmpty()) {
+                                append("  ")
+                                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
+                                    append(edit.replace)
+                                }
+                            }
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    if (missing) {
+                        Text(
+                            "That text isn't in the note any more — skipping this one.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else if (status == EditStatus.AMBIGUOUS) {
+                        Text(
+                            "Appears more than once; the first is changed.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 
 /**
  * The phone's equivalent of the web editor's Assist panel — same actions, same
@@ -63,7 +155,12 @@ fun AssistSheet(
     /** The selected text if there is a selection, otherwise the whole body. */
     source: String,
     scopeIsSelection: Boolean,
-    onRun: (prompt: String, actionId: String?, images: List<NoteImage>) -> Unit,
+    onRun: (
+        prompt: String,
+        actionId: String?,
+        images: List<NoteImage>,
+        wantsEdits: Boolean,
+    ) -> Unit,
     onStop: () -> Unit,
     onReplace: (String) -> Unit,
     onAppend: (String) -> Unit,
@@ -86,6 +183,17 @@ fun AssistSheet(
     LaunchedEffect(state.output) { outputScroll.scrollTo(outputScroll.maxValue) }
 
     val canApply = state.output.isNotBlank() && !state.running
+
+    // Everything that can still be applied starts ticked: the common case is
+    // wanting most of them.
+    var chosen by remember(state.edits) {
+        mutableStateOf(
+            state.edits.orEmpty()
+                .filter { statusOf(source, it) != EditStatus.MISSING }
+                .map { it.id }
+                .toSet()
+        )
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -149,7 +257,14 @@ fun AssistSheet(
                 ACTIONS.forEach { action ->
                     val selected = state.actionId == action.id
                     AssistChip(
-                        onClick = { onRun(action.build(source, title), action.id, attached) },
+                        onClick = {
+                            onRun(
+                                action.build(source, title),
+                                action.id,
+                                attached,
+                                action.result == AiResult.EDITS,
+                            )
+                        },
                         enabled = !state.running,
                         label = { Text(action.label) },
                         colors = if (selected) {
@@ -179,7 +294,7 @@ fun AssistSheet(
                 )
                 Button(
                     onClick = {
-                        onRun(buildCustomPrompt(custom, source), null, attached)
+                        onRun(buildCustomPrompt(custom, source), null, attached, false)
                     },
                     enabled = !state.running && custom.isNotBlank(),
                 ) { Text("Ask") }
@@ -193,7 +308,17 @@ fun AssistSheet(
                 )
             }
 
-            if (state.output.isNotEmpty() || state.running) {
+            val edits = state.edits
+            if (edits != null) {
+                EditList(
+                    edits = edits,
+                    source = source,
+                    chosen = chosen,
+                    onToggle = { id ->
+                        chosen = if (chosen.contains(id)) chosen - id else chosen + id
+                    },
+                )
+            } else if (state.output.isNotEmpty() || state.running) {
                 SelectionContainer {
                     Text(
                         text = state.output.ifEmpty { "…" },
@@ -208,6 +333,25 @@ fun AssistSheet(
 
             if (state.running) {
                 OutlinedButton(onClick = onStop) { Text("Stop") }
+            } else if (edits != null) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Same rule as everywhere else here: nothing reaches the note
+                    // until the user says which parts of it should.
+                    Button(
+                        onClick = {
+                            val picked = edits.filter { chosen.contains(it.id) }
+                            onReplace(applyEdits(source, picked))
+                            onDismiss()
+                        },
+                        enabled = chosen.isNotEmpty(),
+                    ) {
+                        Text(
+                            if (chosen.isEmpty()) "Nothing selected"
+                            else "Apply ${chosen.size} ${if (chosen.size == 1) "edit" else "edits"}"
+                        )
+                    }
+                    OutlinedButton(onClick = onDismiss) { Text("Cancel") }
+                }
             } else {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(

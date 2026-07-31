@@ -13,10 +13,13 @@ import com.justaleks.syncnotes.ai.AiClient
 import com.justaleks.syncnotes.ai.AiProvider
 import com.justaleks.syncnotes.ai.AiSettings
 import com.justaleks.syncnotes.ai.AiSettingsStore
+import com.justaleks.syncnotes.ai.EDIT_SYSTEM_PROMPT
 import com.justaleks.syncnotes.ai.NoteImage
 import com.justaleks.syncnotes.ai.SYSTEM_PROMPT
+import com.justaleks.syncnotes.ai.SuggestedEdit
 import com.justaleks.syncnotes.ai.aiErrorMessage
 import com.justaleks.syncnotes.ai.defaultModel
+import com.justaleks.syncnotes.ai.parseEdits
 import com.justaleks.syncnotes.data.ImageUploader
 import com.justaleks.syncnotes.data.Note
 import com.justaleks.syncnotes.data.NotesRepository
@@ -69,6 +72,11 @@ data class AssistState(
     val error: String = "",
     /** Which action button is lit, or null for a custom instruction. */
     val actionId: String? = null,
+    /**
+     * Set only for the "Suggest edits" action, which comes back as a list to tick
+     * off rather than as prose. Null means "not that kind of result".
+     */
+    val edits: List<SuggestedEdit>? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -193,7 +201,12 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
      * Runs one assist action. Output streams into [assist]; nothing is ever written
      * to the note until the user picks where it goes.
      */
-    fun runAssist(prompt: String, actionId: String?, images: List<NoteImage>) {
+    fun runAssist(
+        prompt: String,
+        actionId: String?,
+        images: List<NoteImage>,
+        wantsEdits: Boolean = false,
+    ) {
         val settings = aiSettings.value
         if (!settings.isConfigured) return
 
@@ -201,10 +214,25 @@ class NotesViewModel(app: Application) : AndroidViewModel(app) {
         assistJob = viewModelScope.launch {
             _assist.value = AssistState(running = true, actionId = actionId)
             try {
-                AiClient.stream(settings, SYSTEM_PROMPT, prompt, images) { chunk ->
+                val system = if (wantsEdits) EDIT_SYSTEM_PROMPT else SYSTEM_PROMPT
+                AiClient.stream(settings, system, prompt, images) { chunk ->
                     _assist.update { it.copy(output = it.output + chunk) }
                 }
-                _assist.update { it.copy(running = false) }
+                _assist.update { current ->
+                    if (!wantsEdits) return@update current.copy(running = false)
+
+                    val parsed = parseEdits(current.output)
+                    if (parsed == null) {
+                        // Fall back to showing the raw reply rather than claiming
+                        // failure — the text is usually still readable and useful.
+                        current.copy(
+                            running = false,
+                            error = "Couldn't read that as a list of edits. The raw reply is below.",
+                        )
+                    } else {
+                        current.copy(running = false, edits = parsed)
+                    }
+                }
             } catch (e: CancellationException) {
                 // Stop keeps whatever streamed so far — it is often enough to use.
                 _assist.update { it.copy(running = false) }

@@ -668,6 +668,55 @@ input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 
   white-space: pre-wrap;
   word-break: break-word;
 }
+.ai-edits {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ai-edits label {
+  display: flex;
+  gap: 9px;
+  padding: 8px 9px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.ai-edits label:hover { border-color: var(--line); background: var(--panel-2); }
+.ai-edits input { margin-top: 3px; accent-color: var(--accent); }
+.ai-edits .stale label { cursor: default; opacity: 0.55; }
+.ai-edits .stale label:hover { border-color: transparent; background: none; }
+
+.ai-edit-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.ai-edit-why { font-size: 13px; }
+.ai-edit-diff {
+  font-size: 12.5px;
+  /* Long quotes must wrap rather than stretch the panel. */
+  overflow-wrap: anywhere;
+}
+.ai-edit-diff del {
+  color: var(--danger);
+  background: rgba(255, 107, 107, 0.1);
+  text-decoration-thickness: 1px;
+}
+.ai-edit-diff ins {
+  margin-left: 6px;
+  color: #7ee0a5;
+  background: rgba(126, 224, 165, 0.12);
+  text-decoration: none;
+}
+.ai-edits .muted { font-size: 12px; }
+
 .ai-caret { animation: ai-blink 1s steps(2) infinite; }
 @keyframes ai-blink { 50% { opacity: 0; } }
 
