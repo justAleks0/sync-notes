@@ -140,7 +140,10 @@ function Editor({
   const [title, setTitle] = useState(note.title)
   const [body, setBody] = useState(note.body)
   const [dirty, setDirty] = useState(false)
-  const [preview, setPreview] = useState(false)
+  // Notes open as the finished thing, not as their source. A note that still has
+  // nothing in it is the exception: there is nothing to read, so it opens ready
+  // to type in.
+  const [preview, setPreview] = useState(note.body.trim().length > 0)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [dragging, setDragging] = useState(false)

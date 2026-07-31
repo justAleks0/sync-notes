@@ -101,7 +101,10 @@ fun EditorScreen(
     val title = titleState.text.toString()
     val body = bodyState.text.toString()
 
-    var preview by remember(note.id) { mutableStateOf(false) }
+    // Notes open as the finished thing, not as their source. A note that still has
+    // nothing in it is the exception: there is nothing to read, so it opens ready
+    // to type in.
+    var preview by remember(note.id) { mutableStateOf(note.body.isNotBlank()) }
     // Captured when the sheet opens: the field loses its selection to the sheet, so
     // the range has to be remembered rather than read back later.
     var assistScope by remember(note.id) { mutableStateOf<TextRange?>(null) }
