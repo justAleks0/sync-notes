@@ -78,19 +78,31 @@ fun EditorScreen(
     var assistScope by remember(note.id) { mutableStateOf<TextRange?>(null) }
     var showAssist by remember(note.id) { mutableStateOf(false) }
 
+    // The last text handed to Firestore. A snapshot matching this is our own write
+    // echoing back, not an edit from another device.
+    var saved by remember(note.id) { mutableStateOf(note.title to note.body) }
+
     // Adopt edits that arrived from another device, but never clobber what the
     // user is actively typing here.
     LaunchedEffect(note.title, note.body, dirty) {
-        if (!dirty) {
-            title = note.title
-            body = note.body
-        }
+        if (dirty) return@LaunchedEffect
+        // Reassigning the field to text it already holds still rebuilds its
+        // TextFieldValue, which throws the caret back to the start. Our own echo
+        // has to be ignored, not merely allowed through harmlessly.
+        if (note.title == saved.first && note.body == saved.second) return@LaunchedEffect
+
+        saved = note.title to note.body
+        title = note.title
+        body = note.body
     }
 
-    // Debounced autosave — no save button, the way a notes app should work.
+    // Debounced autosave — no save button, the way a notes app should work. Keyed on
+    // the text, so a keystroke restarts the delay and nothing is ever marked saved
+    // while newer characters are still sitting in the field.
     LaunchedEffect(dirty, title, body) {
         if (dirty) {
             delay(AUTOSAVE_DELAY_MS)
+            saved = title to body
             onSave(title, body)
             dirty = false
         }

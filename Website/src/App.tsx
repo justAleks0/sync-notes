@@ -149,10 +149,20 @@ function Editor({
   const fileRef = useRef<HTMLInputElement>(null)
   const ai = useAiSettings()
 
+  // The last text we handed to Firestore. A snapshot matching this is our own
+  // write echoing back, not an edit from another device.
+  const saved = useRef({ title: note.title, body: note.body })
+
   // Adopt changes that arrived from another device, but never clobber what the
   // user is actively typing here.
   useEffect(() => {
     if (dirty) return
+    // Re-setting the textarea to text it already contains still counts as a new
+    // value to React, which rebuilds the field and drops the caret at the end.
+    // Our own echo has to be ignored, not merely allowed through harmlessly.
+    if (note.title === saved.current.title && note.body === saved.current.body) return
+
+    saved.current = { title: note.title, body: note.body }
     setTitle(note.title)
     setBody(note.body)
   }, [note.title, note.body, dirty])
@@ -162,7 +172,15 @@ function Editor({
     if (!dirty) return
     clearTimeout(timer.current)
     timer.current = setTimeout(() => {
-      saveNote(uid, note.id, { title, body }).then(() => setDirty(false))
+      const sent = { title, body }
+      saved.current = sent
+      saveNote(uid, note.id, sent).then(() => {
+        // Anything typed while the write was in flight is newer than what we just
+        // sent. Clearing dirty here would declare it saved and let the next
+        // snapshot overwrite it — losing those keystrokes, not just the caret.
+        const now = latest.current
+        if (now.title === sent.title && now.body === sent.body) setDirty(false)
+      })
     }, AUTOSAVE_DELAY_MS)
     return () => clearTimeout(timer.current)
   }, [dirty, title, body, uid, note.id])
